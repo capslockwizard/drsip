@@ -194,7 +194,6 @@ class DR_SIP_Base(object):
         else:
             self.has_dist_rest_data = False
 
-
     def _parse_dist_res_input(self):
         """Parses the distance restraints input file into a Pandas table."""
         self.dist_rest_table = pd.read_csv(
@@ -370,9 +369,9 @@ class DR_SIP_Membrane(DR_SIP_Base):
         if self.has_dist_rest_data:
             filter_data_num_cols = 6
             filter_pass_results_num_cols = 5
-            filter_data_col_names = ['DR Spearman Corr', 'smFRET Pearson Corr',
+            filter_data_col_names = ['DR Spearman Corr', 'DR Pearson Corr',
                                      'Order of Symmetry', 'Cn Symm RMSD', 'Tilt Angle', 'Filter Pass Status']
-            filter_pass_status_col_names = ['smFRET Pass Status', 'Cn Symm Pass Status',
+            filter_pass_status_col_names = ['DR Pass Status', 'Cn Symm Pass Status',
                                             'Tilt Angle Pass Status', 'Orientation Pass Status', 'All Pass Status']
 
         else:
@@ -447,9 +446,10 @@ class DR_SIP_Membrane(DR_SIP_Base):
             final_table = final_table.append(
                 consensus_cluster_members.sort_values('C-n Symm Rank').iloc[0].copy())
 
-        final_table.drop('C-n Symm Rank', axis=1, inplace=True)
-        final_table['DRSIP Rank'] = range(1, final_table.shape[0]+1)
-        final_table.index.name = 'ZDOCK Rank'
+        if final_table.shape[0] != 0:
+            final_table.drop('C-n Symm Rank', axis=1, inplace=True)
+            final_table['DRSIP Rank'] = range(1, final_table.shape[0]+1)
+            final_table.index.name = 'ZDOCK Rank'
 
         return final_table
 
@@ -533,7 +533,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
         static_CA_com = static_CA_coord.mean(axis=0)
         static_CA_ori_coord = static_CA_coord - static_CA_com
 
-        # Get the selection of the static monomer
+        # Get the selection of the mobile monomer
         self.mobile_CA_sel = self.zdock_traj_uni.select_atoms(
             'segid ' + ' '.join(self.mobile_segids) + ' and name CA')
 
@@ -803,11 +803,11 @@ class DR_SIP_Soluble(DR_SIP_Base):
                                              mobile_pdb, zdock_output_file, dist_rest_file)
 
         self.filter_data = pd.DataFrame(np.zeros((self.total_num_poses, 3), dtype='float32'), index=range(
-            1, self.total_num_poses + 1), columns=['smFRET Spearman Corr', 'smFRET Pearson Corr', 'Filter Pass Status'])
+            1, self.total_num_poses + 1), columns=['DR Spearman Corr', 'DR Pearson Corr', 'Filter Pass Status'])
         self.filter_data.index.name = 'ZDOCK Rank'
 
         self.filter_pass_results = pd.DataFrame(np.zeros((self.total_num_poses), dtype='bool'), index=range(
-            1, self.total_num_poses + 1), columns=['smFRET Pass Status'])
+            1, self.total_num_poses + 1), columns=['DR Pass Status'])
         self.filter_pass_results.index.name = 'ZDOCK Rank'
 
     def run(self, dist_rest_cutoff=0.3, cluster_RMSD_cutoff=12.0):
@@ -868,7 +868,7 @@ class DR_SIP_Soluble(DR_SIP_Base):
 
         self.filter_data.values[:] = tmp_filter_results
         self.filter_pass_results.values[:] = tmp_filter_status
-        self.filtered_poses_data = self.filter_data[self.filter_pass_results['smFRET Pass Status'].values].copy(
+        self.filtered_poses_data = self.filter_data[self.filter_pass_results['DR Pass Status'].values].copy(
         ).drop('Filter Pass Status', axis=1)
 
         # Cluster remaining poses
@@ -923,7 +923,7 @@ class DR_SIP_Soluble(DR_SIP_Base):
             cluster_members = filtered_poses_data[filtered_poses_data['Cluster ID'] == cluster_num].copy(
             )
             cluster_members_max_Spearman = cluster_members[np.abs(
-                cluster_members['smFRET Spearman Corr'] - cluster_members['smFRET Spearman Corr'].max()) < 10**(-5)]
+                cluster_members['DR Spearman Corr'] - cluster_members['DR Spearman Corr'].max()) < 10**(-5)]
 
             if cluster_members_max_Spearman.shape[0] == 1:
                 final_table = final_table.append(
@@ -931,10 +931,11 @@ class DR_SIP_Soluble(DR_SIP_Base):
 
             else:
                 final_table = final_table.append(
-                    cluster_members_max_Spearman.loc[cluster_members_max_Spearman['smFRET Pearson Corr'].idxmax()])
+                    cluster_members_max_Spearman.loc[cluster_members_max_Spearman['DR Pearson Corr'].idxmax()])
 
-        final_table['DRSIP Rank'] = range(1, final_table.shape[0]+1)
-        final_table.index.name = 'ZDOCK Rank'
+        if final_table.shape[0] != 0:
+            final_table['DRSIP Rank'] = range(1, final_table.shape[0]+1)
+            final_table.index.name = 'ZDOCK Rank'
 
         return final_table
 
