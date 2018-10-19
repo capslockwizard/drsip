@@ -1,5 +1,5 @@
 # DR-SIP: Distance Restraints- and Cyclic Symmetry-Imposed Packing
-DR-SIP contains tools and molecular docking protocols for predicting the quaternary structures of homo-oligomeric transmembrane proteins (HoTPs) by assuming the complex is cyclic (C_n) symmetric and filtering docking poses with experimentally measured distance restraints between the monomers in the complex.
+DR-SIP contains tools and molecular docking protocols for predicting the quaternary structures of homo-oligomeric transmembrane proteins (HoTPs) by assuming the complex is cyclic (C<sub>n</sub>) symmetric and filtering docking poses with experimentally measured distance restraints between the monomers in the complex.
 
 The DR-SIP package contains 4 Python modules:
 1. drsip: Implements the molecular docking protocols. Current implementation accepts ZDOCK output files.
