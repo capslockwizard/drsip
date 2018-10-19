@@ -1,0 +1,149 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>drsip.dist_restraints_filter &#8212; smFIRST 1.0 documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" src="../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for drsip.dist_restraints_filter</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">=========================================================</span>
+<span class="sd">Distance Restraints Filter (:mod:`drsip.dist_restraints`)</span>
+<span class="sd">=========================================================</span>
+
+<span class="sd">Module contains the function implementing the distance restraints</span>
+<span class="sd">filter.</span>
+
+<span class="sd">Functions</span>
+<span class="sd">---------</span>
+
+<span class="sd">.. autofunction:: dist_restraints_filter</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">scipy</span> <span class="k">import</span> <span class="n">stats</span>
+<span class="kn">from</span> <span class="nn">MDAnalysis.analysis</span> <span class="k">import</span> <span class="n">distances</span>
+
+
+<div class="viewcode-block" id="dist_restraints_filter"><a class="viewcode-back" href="../../init.html#drsip.dist_restraints_filter.dist_restraints_filter">[docs]</a><span class="k">def</span> <span class="nf">dist_restraints_filter</span><span class="p">(</span><span class="n">static_coord</span><span class="p">,</span> <span class="n">mobile_coord</span><span class="p">,</span> <span class="n">dist_mat_idx</span><span class="p">,</span> <span class="n">dist_rest_data</span><span class="p">,</span> <span class="n">cutoff</span><span class="o">=</span><span class="mf">0.3</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Distance restraints filter.</span>
+
+<span class="sd">    Pearson and Spearman correlation between the given distance</span>
+<span class="sd">    restraints and the distances between C-alpha atoms of the</span>
+<span class="sd">    corresponding residue pairs in docking poses are used to filter the</span>
+<span class="sd">    docking poses.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    static_ori_coord, mobile_ori_coord : np.array</span>
+<span class="sd">        Nx3 coordinate array of the static monomer and mobile monomer,</span>
+<span class="sd">        respectively, from the docking pose. Where N is the number of</span>
+<span class="sd">        atoms.</span>
+<span class="sd">    dist_mat_idx : list</span>
+<span class="sd">        Contains 2 lists. The lists represents the row (first list) and</span>
+<span class="sd">        column (second) indices (0-indexed) of the distance matrix that</span>
+<span class="sd">        corresponds to the residue pairs in the distance restraints</span>
+<span class="sd">        table.</span>
+<span class="sd">    dist_rest_data : np.array</span>
+<span class="sd">        Array containing the distance restraints.</span>
+<span class="sd">    cutoff : float, optional</span>
+<span class="sd">        The distance restraints cutoff. If the docking pose&#39;s Spearman</span>
+<span class="sd">        and Pearson correlation &lt;= cuttoff, the docking pose fails to</span>
+<span class="sd">        pass the filter.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    list</span>
+<span class="sd">        Contains the distance between the C-alpha atoms (np.array),</span>
+<span class="sd">        Spearman correlation (float), Pearson correlation (float) and</span>
+<span class="sd">        pass status (bool). The pass status is True when the docking</span>
+<span class="sd">        pose passes the filter and vice versa.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">dist_mat</span> <span class="o">=</span> <span class="n">distances</span><span class="o">.</span><span class="n">distance_array</span><span class="p">(</span><span class="n">static_coord</span><span class="p">,</span> <span class="n">mobile_coord</span><span class="p">)</span>
+
+    <span class="n">current_distances</span> <span class="o">=</span> <span class="n">dist_mat</span><span class="p">[</span><span class="n">dist_mat_idx</span><span class="p">]</span>
+    <span class="n">spearman_correl</span> <span class="o">=</span> <span class="n">stats</span><span class="o">.</span><span class="n">pearsonr</span><span class="p">(</span><span class="n">stats</span><span class="o">.</span><span class="n">rankdata</span><span class="p">(</span>
+        <span class="n">dist_rest_data</span><span class="p">),</span> <span class="n">stats</span><span class="o">.</span><span class="n">rankdata</span><span class="p">(</span><span class="n">current_distances</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">pearson_correl</span> <span class="o">=</span> <span class="n">stats</span><span class="o">.</span><span class="n">pearsonr</span><span class="p">(</span><span class="n">dist_rest_data</span><span class="p">,</span> <span class="n">current_distances</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">pass_status</span> <span class="o">=</span> <span class="p">(</span><span class="n">spearman_correl</span> <span class="o">&gt;</span> <span class="n">cutoff</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">pearson_correl</span> <span class="o">&gt;</span> <span class="n">cutoff</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">[</span><span class="n">current_distances</span><span class="p">,</span> <span class="n">spearman_correl</span><span class="p">,</span> <span class="n">pearson_correl</span><span class="p">,</span> <span class="n">pass_status</span><span class="p">]</span></div>
+
+
+<span class="k">def</span> <span class="nf">dist_restraints_filter_pearson_only</span><span class="p">(</span><span class="n">static_coord</span><span class="p">,</span> <span class="n">mobile_coord</span><span class="p">,</span> <span class="n">dist_mat_idx</span><span class="p">,</span> <span class="n">dist_rest_data</span><span class="p">,</span> <span class="n">cutoff</span><span class="o">=</span><span class="mf">0.3</span><span class="p">):</span>
+    <span class="n">dist_mat</span> <span class="o">=</span> <span class="n">distances</span><span class="o">.</span><span class="n">distance_array</span><span class="p">(</span><span class="n">static_coord</span><span class="p">,</span> <span class="n">mobile_coord</span><span class="p">)</span>
+
+    <span class="n">current_distances</span> <span class="o">=</span> <span class="n">dist_mat</span><span class="p">[</span><span class="n">dist_mat_idx</span><span class="p">]</span>
+    <span class="n">pearson_correl</span> <span class="o">=</span> <span class="n">stats</span><span class="o">.</span><span class="n">pearsonr</span><span class="p">(</span><span class="n">dist_rest_data</span><span class="p">,</span> <span class="n">current_distances</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">pass_status</span> <span class="o">=</span> <span class="n">pearson_correl</span> <span class="o">&gt;</span> <span class="n">cutoff</span>
+
+    <span class="k">return</span> <span class="p">[</span><span class="n">current_distances</span><span class="p">,</span> <span class="n">pearson_correl</span><span class="p">,</span> <span class="n">pass_status</span><span class="p">]</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  <li><a href="../drsip.html">drsip</a><ul>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Justin Chan.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,1124 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>drsip &#8212; smFIRST 1.0 documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for drsip</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">========================================================</span>
+<span class="sd">DR-SIP package (:mod:`drsip`)</span>
+<span class="sd">========================================================</span>
+
+<span class="sd">Package contains filters and protocols for predicting homo-oligomeric</span>
+<span class="sd">transmembrane proteins (HoTPs).</span>
+
+<span class="sd">Functions</span>
+<span class="sd">---------</span>
+
+<span class="sd">.. autofunction:: DR_SIP</span>
+<span class="sd">.. autofunction:: load_data</span>
+
+<span class="sd">Classes</span>
+<span class="sd">-------</span>
+
+<span class="sd">.. autoclass:: DR_SIP_Base</span>
+<span class="sd">    :members:</span>
+
+<span class="sd">.. autoclass:: DR_SIP_Membrane</span>
+<span class="sd">    :members:</span>
+
+<span class="sd">.. autoclass:: DR_SIP_Soluble</span>
+<span class="sd">    :members:</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">ZDOCK</span> <span class="k">import</span> <span class="n">ZDOCK</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">string</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="k">import</span> <span class="n">Counter</span>
+<span class="kn">import</span> <span class="nn">Prot_Interface_Analysis</span>
+<span class="kn">import</span> <span class="nn">MDAnalysis</span>
+<span class="kn">import</span> <span class="nn">umsgpack</span>
+<span class="kn">import</span> <span class="nn">zlib</span>
+<span class="kn">import</span> <span class="nn">Cn_symm_criterion</span>
+<span class="kn">import</span> <span class="nn">dist_restraints_filter</span>
+<span class="kn">import</span> <span class="nn">orientation_criterion</span>
+<span class="kn">import</span> <span class="nn">struct_clustering</span>
+<span class="kn">import</span> <span class="nn">tilt_angle_criterion</span>
+<span class="kn">import</span> <span class="nn">save_load</span>
+
+
+<div class="viewcode-block" id="load_data"><a class="viewcode-back" href="../init.html#drsip.load_data">[docs]</a><span class="k">def</span> <span class="nf">load_data</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Load saved DR_SIP data from file and return DR_SIP instance.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    filename : str</span>
+<span class="sd">        Full path to save file.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    drsip_inst</span>
+<span class="sd">        Instance of DR_SIP with data from save file.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">input_file</span><span class="p">:</span>
+        <span class="n">temp_storage_dict</span> <span class="o">=</span> <span class="n">umsgpack</span><span class="o">.</span><span class="n">unpackb</span><span class="p">(</span>
+            <span class="n">zlib</span><span class="o">.</span><span class="n">decompress</span><span class="p">(</span><span class="n">input_file</span><span class="o">.</span><span class="n">read</span><span class="p">()))</span>
+
+    <span class="k">if</span> <span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;protocol&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;soluble&#39;</span><span class="p">:</span>
+        <span class="n">soluble_state</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">elif</span> <span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;protocol&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;membrane&#39;</span><span class="p">:</span>
+        <span class="n">soluble_state</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Invalid protocol type: </span><span class="si">{0}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;protocol&#39;</span><span class="p">]))</span>
+
+    <span class="k">if</span> <span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;has_dist_rest_data&#39;</span><span class="p">]:</span>
+        <span class="n">save_load</span><span class="o">.</span><span class="n">load_StrIO</span><span class="p">(</span><span class="n">temp_storage_dict</span><span class="p">,</span> <span class="s1">&#39;dist_rest_file&#39;</span><span class="p">)</span>
+        <span class="n">dist_rest_file_input</span> <span class="o">=</span> <span class="n">temp_storage_dict</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;dist_rest_file&#39;</span><span class="p">)</span>
+        <span class="n">save_load</span><span class="o">.</span><span class="n">load_pd_table</span><span class="p">(</span>
+            <span class="n">temp_storage_dict</span><span class="p">,</span> <span class="s1">&#39;dist_rest_conform_dist&#39;</span><span class="p">,</span> <span class="n">pop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">dist_rest_file_input</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+
+    <span class="k">for</span> <span class="n">file_var</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;static_pdb&#39;</span><span class="p">,</span> <span class="s1">&#39;mobile_pdb&#39;</span><span class="p">,</span> <span class="s1">&#39;zdock_output_file&#39;</span><span class="p">]:</span>
+        <span class="n">save_load</span><span class="o">.</span><span class="n">load_StrIO</span><span class="p">(</span><span class="n">temp_storage_dict</span><span class="p">,</span> <span class="n">file_var</span><span class="p">)</span>
+
+    <span class="n">drsip_inst</span> <span class="o">=</span> <span class="n">DR_SIP</span><span class="p">(</span><span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;static_pdb&#39;</span><span class="p">],</span> <span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;mobile_pdb&#39;</span><span class="p">],</span>
+                        <span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;zdock_output_file&#39;</span><span class="p">],</span> <span class="n">dist_rest_file_input</span><span class="p">,</span> <span class="n">soluble_state</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">pd_var</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;filter_data&#39;</span><span class="p">,</span> <span class="s1">&#39;filter_pass_results&#39;</span><span class="p">,</span> <span class="s1">&#39;filtered_poses_data&#39;</span><span class="p">,</span> <span class="s1">&#39;final_results&#39;</span><span class="p">]:</span>
+        <span class="n">save_load</span><span class="o">.</span><span class="n">load_pd_table</span><span class="p">(</span><span class="n">temp_storage_dict</span><span class="p">,</span> <span class="n">pd_var</span><span class="p">,</span> <span class="n">pop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="s1">&#39;poses_CAPRI_class_val&#39;</span> <span class="ow">in</span> <span class="n">temp_storage_dict</span><span class="p">:</span>
+        <span class="n">save_load</span><span class="o">.</span><span class="n">load_pd_table</span><span class="p">(</span>
+            <span class="n">temp_storage_dict</span><span class="p">,</span> <span class="s1">&#39;poses_CAPRI_class&#39;</span><span class="p">,</span> <span class="n">pop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">soluble_state</span><span class="p">:</span>
+        <span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;static_orient_unit_vec&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+            <span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;static_orient_unit_vec&#39;</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;trans_vect&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+            <span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;trans_vect&#39;</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;axis_of_rot&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+            <span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;axis_of_rot&#39;</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;cylindrical_axis&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+            <span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;cylindrical_axis&#39;</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+    <span class="n">drsip_inst</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">temp_storage_dict</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">drsip_inst</span></div>
+
+
+<div class="viewcode-block" id="DR_SIP"><a class="viewcode-back" href="../init.html#drsip.DR_SIP">[docs]</a><span class="k">def</span> <span class="nf">DR_SIP</span><span class="p">(</span><span class="n">static_pdb</span><span class="p">,</span> <span class="n">mobile_pdb</span><span class="p">,</span> <span class="n">zdock_output_file</span><span class="p">,</span> <span class="n">dist_rest_file</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">soluble</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Initialize the correct docking protocol.</span>
+
+<span class="sd">    The default protocol is the membrane protocol. To select the</span>
+<span class="sd">    soluble protocol, set soluble to True.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    static_pdb, mobile_pdb : str</span>
+<span class="sd">        Full path to the PDB files containing the static and mobile</span>
+<span class="sd">        monomers.</span>
+<span class="sd">    zdock_output_file : str</span>
+<span class="sd">        Full path to the ZDOCK output file. Tested on the output files</span>
+<span class="sd">        of ZDOCK 3.0.2.</span>
+<span class="sd">    dist_rest_file : str, optional</span>
+<span class="sd">        Full path to the distance restraints file, defaults to empty</span>
+<span class="sd">        string. When empty, the distance restraints filter is not used.</span>
+<span class="sd">        Must be filled in when soluble is set to True.</span>
+
+<span class="sd">        File is formatted such that each line corresponds to a distance</span>
+<span class="sd">        restraint (tab delimited)::</span>
+
+<span class="sd">            chain_id_1 res_id_1 chain_id_2 res_id_2 distance</span>
+
+<span class="sd">    soluble : bool, optional</span>
+<span class="sd">        Defaults to False, which uses DR-SIP&#39;s membrane protocol. When</span>
+<span class="sd">        set to True, uses the membrane protocol.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">soluble</span><span class="p">:</span>
+
+        <span class="k">if</span> <span class="n">dist_rest_file</span> <span class="o">!=</span> <span class="s1">&#39;&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">DR_SIP_Soluble</span><span class="p">(</span><span class="n">static_pdb</span><span class="p">,</span> <span class="n">mobile_pdb</span><span class="p">,</span> <span class="n">zdock_output_file</span><span class="p">,</span> <span class="n">dist_rest_file</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">IOError</span><span class="p">(</span>
+                <span class="s1">&#39;dist_rest_file is empty, please supply the path to the file&#39;</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">DR_SIP_Membrane</span><span class="p">(</span><span class="n">static_pdb</span><span class="p">,</span> <span class="n">mobile_pdb</span><span class="p">,</span> <span class="n">zdock_output_file</span><span class="p">,</span> <span class="n">dist_rest_file</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="DR_SIP_Base"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Base">[docs]</a><span class="k">class</span> <span class="nc">DR_SIP_Base</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    DR_SIP base class.</span>
+
+<span class="sd">    For subclassing only.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    static_pdb, mobile_pdb : str</span>
+<span class="sd">        Full path to the static and mobile monomer PDB files.</span>
+<span class="sd">    zdock_output_file : str</span>
+<span class="sd">        Full path to the ZDOCK output file.</span>
+<span class="sd">    dist_rest_file : str, optional</span>
+<span class="sd">        Full path to the distance restraints file, defaults to empty</span>
+<span class="sd">        string.</span>
+
+<span class="sd">        File is formatted such that each line corresponds to a distance</span>
+<span class="sd">        restraint (tab delimited)::</span>
+
+<span class="sd">            chain_id_1 res_id_1 chain_id_2 res_id_2 distance</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">static_pdb</span><span class="p">,</span> <span class="n">mobile_pdb</span><span class="p">,</span> <span class="n">zdock_output_file</span><span class="p">,</span> <span class="n">dist_rest_file</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">static_pdb</span> <span class="o">=</span> <span class="n">static_pdb</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mobile_pdb</span> <span class="o">=</span> <span class="n">mobile_pdb</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">zdock_output_file</span> <span class="o">=</span> <span class="n">zdock_output_file</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span> <span class="o">=</span> <span class="n">ZDOCK</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">zdock_output_file</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">static_pdb</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">mobile_pdb</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">num_poses</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">static_segids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">static_uni</span><span class="o">.</span><span class="n">atoms</span><span class="o">.</span><span class="n">segids</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mobile_segids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">mobile_uni</span><span class="o">.</span><span class="n">atoms</span><span class="o">.</span><span class="n">segids</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">dist_rest_file</span> <span class="o">!=</span> <span class="s1">&#39;&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_file</span> <span class="o">=</span> <span class="n">dist_rest_file</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_parse_dist_res_input</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">has_dist_rest_data</span> <span class="o">=</span> <span class="kc">True</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">has_dist_rest_data</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="k">def</span> <span class="nf">_parse_dist_res_input</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Parses the distance restraints input file into a Pandas table.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_table</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_file</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">header</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">index_col</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_table</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="s1">&#39;Segid 1&#39;</span><span class="p">,</span> <span class="s1">&#39;Resid 1&#39;</span><span class="p">,</span> <span class="s1">&#39;Segid 2&#39;</span><span class="p">,</span> <span class="s1">&#39;Resid 2&#39;</span><span class="p">,</span> <span class="s1">&#39;Dist&#39;</span><span class="p">]</span>
+
+        <span class="c1"># Swap columns of rows to make sure that the segid 1 corresponds to the static monomer</span>
+        <span class="n">swap_rows</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
+            <span class="o">~</span><span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_table</span><span class="p">[</span><span class="s1">&#39;Segid 1&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">static_segids</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_table</span><span class="o">.</span><span class="n">ix</span><span class="p">[</span><span class="n">swap_rows</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;Segid 1&#39;</span><span class="p">,</span> <span class="s1">&#39;Resid 1&#39;</span><span class="p">,</span> <span class="s1">&#39;Segid 2&#39;</span><span class="p">,</span> <span class="s1">&#39;Resid 2&#39;</span><span class="p">]</span>
+                                <span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_table</span><span class="o">.</span><span class="n">ix</span><span class="p">[</span><span class="n">swap_rows</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;Segid 2&#39;</span><span class="p">,</span> <span class="s1">&#39;Resid 2&#39;</span><span class="p">,</span> <span class="s1">&#39;Segid 1&#39;</span><span class="p">,</span> <span class="s1">&#39;Resid 1&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">values</span>
+
+        <span class="c1"># Make sure each column&#39;s dtype is correct</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_table</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_table</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Segid 1&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;Resid 1&#39;</span><span class="p">:</span> <span class="s1">&#39;int32&#39;</span><span class="p">,</span> <span class="s1">&#39;Segid 2&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;Resid 2&#39;</span><span class="p">:</span> <span class="s1">&#39;int32&#39;</span><span class="p">,</span> <span class="s1">&#39;Dist&#39;</span><span class="p">:</span> <span class="s1">&#39;float32&#39;</span><span class="p">})</span>
+
+        <span class="c1"># Make sure the segids are valid segids</span>
+        <span class="n">segids_only</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_table</span><span class="o">.</span><span class="n">loc</span><span class="p">[:,</span> <span class="p">[</span>
+            <span class="s1">&#39;Segid 1&#39;</span><span class="p">,</span> <span class="s1">&#39;Segid 2&#39;</span><span class="p">]]</span>
+        <span class="n">num_unknown_segids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="o">~</span><span class="n">segids_only</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">static_segids</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mobile_segids</span><span class="p">)))[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">num_unknown_segids</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span>
+                <span class="s1">&#39;Invalid chains in distance restraints input data: Must be from the static/mobile structure&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Check and see if there are pairs whose segids are identical</span>
+        <span class="n">num_identical_segids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
+            <span class="n">segids_only</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">segids_only</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">num_identical_segids</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span>
+                <span class="s1">&#39;Distance restraints input data contains pairs of residues with the same chain ID&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Prepare selection of residues involved in the the distance restraints</span>
+        <span class="n">sel_str_format</span> <span class="o">=</span> <span class="s1">&#39;(segid </span><span class="si">{0}</span><span class="s1"> and resid </span><span class="si">{1}</span><span class="s1">)&#39;</span><span class="o">.</span><span class="n">format</span>
+
+        <span class="n">static_sel_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">sel_str_format</span><span class="p">(</span>
+            <span class="o">*</span><span class="n">resid</span><span class="p">)</span> <span class="k">for</span> <span class="n">resid</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_table</span><span class="p">[[</span><span class="s1">&#39;Segid 1&#39;</span><span class="p">,</span> <span class="s1">&#39;Resid 1&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">values</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dist_res_static_sel_str</span> <span class="o">=</span> <span class="s1">&#39; or &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+            <span class="n">static_sel_list</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; and name CA&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dist_res_static_sel</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">get_selection</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dist_res_static_sel_str</span><span class="p">)</span>
+
+        <span class="n">mobile_sel_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">sel_str_format</span><span class="p">(</span>
+            <span class="o">*</span><span class="n">resid</span><span class="p">)</span> <span class="k">for</span> <span class="n">resid</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_table</span><span class="p">[[</span><span class="s1">&#39;Segid 2&#39;</span><span class="p">,</span> <span class="s1">&#39;Resid 2&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">values</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dist_res_mobile_sel_str</span> <span class="o">=</span> <span class="s1">&#39; or &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+            <span class="n">mobile_sel_list</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; and name CA&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dist_res_mobile_sel</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">get_selection</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dist_res_mobile_sel_str</span><span class="p">)</span>
+
+        <span class="n">seg_res_1_pairs_ordered</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dist_res_static_sel</span><span class="o">.</span><span class="n">segids</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_res_static_sel</span><span class="o">.</span><span class="n">resids</span><span class="p">)</span>
+        <span class="n">seg_res_2_pairs_ordered</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dist_res_mobile_sel</span><span class="o">.</span><span class="n">segids</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_res_mobile_sel</span><span class="o">.</span><span class="n">resids</span><span class="p">)</span>
+
+        <span class="c1"># Indices for extracting relevent residue pairs from distance matrix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dist_mat_idx</span> <span class="o">=</span> <span class="p">[[</span><span class="n">seg_res_1_pairs_ordered</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()))</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_table</span><span class="o">.</span><span class="n">loc</span><span class="p">[:,</span> <span class="p">[</span><span class="s1">&#39;Segid 1&#39;</span><span class="p">,</span> <span class="s1">&#39;Resid 1&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">iterrows</span><span class="p">()],</span> <span class="p">[</span>
+            <span class="n">seg_res_2_pairs_ordered</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()))</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_table</span><span class="o">.</span><span class="n">loc</span><span class="p">[:,</span> <span class="p">[</span><span class="s1">&#39;Segid 2&#39;</span><span class="p">,</span> <span class="s1">&#39;Resid 2&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">iterrows</span><span class="p">()]]</span>
+
+        <span class="c1"># Constraint distance data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_table</span><span class="o">.</span><span class="n">loc</span><span class="p">[:,</span> <span class="s1">&#39;Dist&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span>
+
+        <span class="c1"># Initialize table to store the distances of the residue pairs for each pose</span>
+        <span class="n">col_name</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;</span><span class="si">{0}</span><span class="s1">-</span><span class="si">{1}</span><span class="s1">-</span><span class="si">{2}</span><span class="s1">-</span><span class="si">{3}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_table</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">idx</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="mi">4</span><span class="p">])</span>
+                    <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">xrange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_table</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_conform_dist</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">num_poses</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_table</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])),</span> <span class="n">columns</span><span class="o">=</span><span class="n">col_name</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">num_poses</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+
+<div class="viewcode-block" id="DR_SIP_Base.write_results_file"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Base.write_results_file">[docs]</a>    <span class="k">def</span> <span class="nf">write_results_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Write the top 10 results table to an Excel file.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        filename : str</span>
+<span class="sd">            Full path to save the Excel file to.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="s1">&#39;final_results&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">final_results</span><span class="o">.</span><span class="n">to_excel</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="DR_SIP_Base.get_final_results_table"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Base.get_final_results_table">[docs]</a>    <span class="k">def</span> <span class="nf">get_final_results_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clusters</span><span class="p">,</span> <span class="n">filtered_poses_data</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns the final results table.</span>
+
+<span class="sd">        Table contains the final ranking of the docking poses.</span>
+
+<span class="sd">        Needs to be implemented by the child class.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        clusters : list of int</span>
+<span class="sd">            List containing the cluster numbers of each pose.</span>
+<span class="sd">        filtered_poses_data : pandas.Dataframe</span>
+<span class="sd">            Table containing the filter data and cluster assignment of</span>
+<span class="sd">            each pose.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        results_table : pandas.Dataframe</span>
+<span class="sd">            Table of the final ranks of the docking poses.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
+
+<div class="viewcode-block" id="DR_SIP_Base.calc_CAPRI_class"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Base.calc_CAPRI_class">[docs]</a>    <span class="k">def</span> <span class="nf">calc_CAPRI_class</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ref_pdb_file</span><span class="p">,</span> <span class="n">static_sel_str</span><span class="p">,</span> <span class="n">mobile_sel_str</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Classify each docking pose to one of four CAPRI classes.</span>
+
+<span class="sd">        Each docking pose is compared to the reference pose in</span>
+<span class="sd">        ref_pdb_file and assigned to one of the following classes:</span>
+<span class="sd">        &#39;Incorrect&#39;, &#39;Acceptable&#39;, &#39;Medium&#39; or &#39;High&#39;.</span>
+
+<span class="sd">        Uses the CAPRI criteria to classify the poses. See</span>
+<span class="sd">        :ref:`Prot_Interface_Analysis.CAPRI_Criteria.calc_CAPRI_class`.</span>
+
+<span class="sd">        Needs to be implemented by the child class.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        ref_pdb_file : str</span>
+<span class="sd">            Full file path to PDB file containing the reference pose.</span>
+<span class="sd">        static_sel_str, mobile_sel_str : str</span>
+<span class="sd">            MDAnalysis style selection string to select the atoms in</span>
+<span class="sd">            ref_pdb_file that corresponds to the static and mobile</span>
+<span class="sd">            monomer, respectively.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        CAPRI_class : pandas.Dataframe</span>
+<span class="sd">            Table of the docking poses with their respective</span>
+<span class="sd">            classifications.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
+
+<div class="viewcode-block" id="DR_SIP_Base.run"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Base.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Executes the docking protocol.</span>
+
+<span class="sd">        Needs to be implemented by the child class.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div></div>
+
+
+<div class="viewcode-block" id="DR_SIP_Membrane"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Membrane">[docs]</a><span class="k">class</span> <span class="nc">DR_SIP_Membrane</span><span class="p">(</span><span class="n">DR_SIP_Base</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    DR-SIP&#39;s membrane protocol.</span>
+
+<span class="sd">    Protocol uses the C\ :sub:n symmetry, orientation, tilt angle and</span>
+<span class="sd">    distance restraints (optional) filters on ZDOCK results.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    static_pdb, mobile_pdb : str</span>
+<span class="sd">        Full path to the static and mobile monomer PDB files.</span>
+<span class="sd">    zdock_output_file : str</span>
+<span class="sd">        Full path to the ZDOCK output file.</span>
+<span class="sd">    dist_rest_file : str, optional</span>
+<span class="sd">        Full path to the distance restraints file, defaults to empty</span>
+<span class="sd">        string.</span>
+
+<span class="sd">        File is formatted such that each line corresponds to a distance</span>
+<span class="sd">        restraint (tab delimited)::</span>
+
+<span class="sd">            chain_1 resid_1 chain_2 resid_2 distance</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">static_pdb</span><span class="p">,</span> <span class="n">mobile_pdb</span><span class="p">,</span> <span class="n">zdock_output_file</span><span class="p">,</span> <span class="n">dist_rest_file</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">DR_SIP_Membrane</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">static_pdb</span><span class="p">,</span>
+                                              <span class="n">mobile_pdb</span><span class="p">,</span> <span class="n">zdock_output_file</span><span class="p">,</span> <span class="n">dist_rest_file</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_dist_rest_data</span><span class="p">:</span>
+            <span class="n">filter_data_num_cols</span> <span class="o">=</span> <span class="mi">6</span>
+            <span class="n">filter_pass_results_num_cols</span> <span class="o">=</span> <span class="mi">5</span>
+            <span class="n">filter_data_col_names</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;DR Spearman Corr&#39;</span><span class="p">,</span> <span class="s1">&#39;smFRET Pearson Corr&#39;</span><span class="p">,</span>
+                                     <span class="s1">&#39;Order of Symmetry&#39;</span><span class="p">,</span> <span class="s1">&#39;Cn Symm RMSD&#39;</span><span class="p">,</span> <span class="s1">&#39;Tilt Angle&#39;</span><span class="p">,</span> <span class="s1">&#39;Filter Pass Status&#39;</span><span class="p">]</span>
+            <span class="n">filter_pass_status_col_names</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;smFRET Pass Status&#39;</span><span class="p">,</span> <span class="s1">&#39;Cn Symm Pass Status&#39;</span><span class="p">,</span>
+                                            <span class="s1">&#39;Tilt Angle Pass Status&#39;</span><span class="p">,</span> <span class="s1">&#39;Orientation Pass Status&#39;</span><span class="p">,</span> <span class="s1">&#39;All Pass Status&#39;</span><span class="p">]</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">filter_data_num_cols</span> <span class="o">=</span> <span class="mi">4</span>
+            <span class="n">filter_pass_results_num_cols</span> <span class="o">=</span> <span class="mi">4</span>
+            <span class="n">filter_data_col_names</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="s1">&#39;Order of Symmetry&#39;</span><span class="p">,</span> <span class="s1">&#39;Cn Symm RMSD&#39;</span><span class="p">,</span> <span class="s1">&#39;Tilt Angle&#39;</span><span class="p">,</span> <span class="s1">&#39;Filter Pass Status&#39;</span><span class="p">]</span>
+            <span class="n">filter_pass_status_col_names</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="s1">&#39;Cn Symm Pass Status&#39;</span><span class="p">,</span> <span class="s1">&#39;Tilt Angle Pass Status&#39;</span><span class="p">,</span> <span class="s1">&#39;Orientation Pass Status&#39;</span><span class="p">,</span> <span class="s1">&#39;All Pass Status&#39;</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter_data</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span><span class="p">,</span> <span class="n">filter_data_num_cols</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float32&#39;</span><span class="p">),</span> <span class="n">index</span><span class="o">=</span><span class="nb">range</span><span class="p">(</span>
+            <span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="n">columns</span><span class="o">=</span><span class="n">filter_data_col_names</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter_data</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;ZDOCK Rank&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter_pass_results</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span><span class="p">,</span> <span class="n">filter_pass_results_num_cols</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;bool&#39;</span><span class="p">),</span> <span class="n">index</span><span class="o">=</span><span class="nb">range</span><span class="p">(</span>
+            <span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="n">columns</span><span class="o">=</span><span class="n">filter_pass_status_col_names</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter_pass_results</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;ZDOCK Rank&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">trans_vect</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float32&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">axis_of_rot</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float32&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cylindrical_axis</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float32&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="DR_SIP_Membrane.get_final_results_table"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Membrane.get_final_results_table">[docs]</a>    <span class="k">def</span> <span class="nf">get_final_results_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clusters</span><span class="p">,</span> <span class="n">filtered_poses_data</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns the final results table.</span>
+
+<span class="sd">        Table contains the representative poses of each cluster ranked</span>
+<span class="sd">        based on the size of the clusters (in ascending order). For each</span>
+<span class="sd">        representative pose the Cluster ID, Order of Symmetry, Subunit</span>
+<span class="sd">        RMSD, Tilt Angle, Dist Rest Pearson Corr and Dist Rest Spearman</span>
+<span class="sd">        Corr are included in the table.</span>
+
+<span class="sd">        The representative pose of each cluster are chosen based on 2</span>
+<span class="sd">        criteria:</span>
+
+<span class="sd">        1. The consensus order of symmetry within a cluster. Only</span>
+<span class="sd">           poses that have the consensus order of symmetry are chosen.</span>
+<span class="sd">        2. The pose with the lowest C\ :sub:`n` symmetry RMSD.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        clusters : list of int</span>
+<span class="sd">            List containing the cluster numbers of each pose.</span>
+<span class="sd">        filtered_poses_data : pandas.Dataframe</span>
+<span class="sd">            Table containing the filter data and cluster assignment of</span>
+<span class="sd">            each pose.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        results_table : pandas.Dataframe</span>
+<span class="sd">            Table of the representative poses ranked by cluster size.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">cluster_counts</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">(</span><span class="n">clusters</span><span class="p">)</span>
+        <span class="n">final_table</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">cluster_num</span><span class="p">,</span> <span class="n">counts</span> <span class="ow">in</span> <span class="n">cluster_counts</span><span class="o">.</span><span class="n">most_common</span><span class="p">():</span>
+
+            <span class="k">if</span> <span class="n">counts</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="k">break</span>
+
+            <span class="n">cluster_members</span> <span class="o">=</span> <span class="n">filtered_poses_data</span><span class="p">[</span><span class="n">filtered_poses_data</span><span class="p">[</span><span class="s1">&#39;Cluster ID&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">cluster_num</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span>
+            <span class="p">)</span>
+            <span class="n">consensus_order_of_symm</span> <span class="o">=</span> <span class="n">cluster_members</span><span class="p">[</span><span class="s1">&#39;Order of Symmetry&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">value_counts</span><span class="p">(</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+            <span class="n">consensus_cluster_members</span> <span class="o">=</span> <span class="n">cluster_members</span><span class="p">[</span><span class="n">cluster_members</span><span class="p">[</span><span class="s1">&#39;Order of Symmetry&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">consensus_order_of_symm</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span>
+            <span class="p">)</span>
+            <span class="n">consensus_cluster_members</span><span class="p">[</span><span class="s1">&#39;C-n Symm Rank&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span>
+                <span class="n">consensus_cluster_members</span><span class="p">[</span><span class="s1">&#39;Cn Symm RMSD&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+            <span class="n">final_table</span> <span class="o">=</span> <span class="n">final_table</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">consensus_cluster_members</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="s1">&#39;C-n Symm Rank&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>
+
+        <span class="n">final_table</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="s1">&#39;C-n Symm Rank&#39;</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">final_table</span><span class="p">[</span><span class="s1">&#39;DRSIP Rank&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">final_table</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">final_table</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;ZDOCK Rank&#39;</span>
+
+        <span class="k">return</span> <span class="n">final_table</span></div>
+
+<div class="viewcode-block" id="DR_SIP_Membrane.calc_CAPRI_class"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Membrane.calc_CAPRI_class">[docs]</a>    <span class="k">def</span> <span class="nf">calc_CAPRI_class</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ref_pdb_file</span><span class="p">,</span> <span class="n">static_sel_str</span><span class="p">,</span> <span class="n">mobile_sel_str</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Classify each docking pose to one of four CAPRI classes.</span>
+
+<span class="sd">        Each docking pose is compared to the reference pose in</span>
+<span class="sd">        ref_pdb_file and assigned to one of the following classes:</span>
+<span class="sd">        &#39;Incorrect&#39;, &#39;Acceptable&#39;, &#39;Medium&#39; or &#39;High&#39;.</span>
+
+<span class="sd">        Uses the CAPRI criteria to classify the poses. See</span>
+<span class="sd">        :ref:`Prot_Interface_Analysis.CAPRI_Criteria.calc_CAPRI_class`.</span>
+
+<span class="sd">        Each monomer in a C\ :sub:n symmetric HoTP have 2 binding</span>
+<span class="sd">        interfaces, therefore there are 2 ways for the mobile monomer</span>
+<span class="sd">        to bind to the static monomer. Each pose is compared to the 2</span>
+<span class="sd">        possible binding interfaces. The interface with the higher %</span>
+<span class="sd">        native contacts was used to classify the docking pose.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        ref_pdb_file : str</span>
+<span class="sd">            Full file path to PDB file containing the reference pose.</span>
+<span class="sd">        static_sel_str, mobile_sel_str : str</span>
+<span class="sd">            MDAnalysis style selection string to select the atoms in</span>
+<span class="sd">            ref_pdb_file that corresponds to the static and mobile</span>
+<span class="sd">            monomer, respectively.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        CAPRI_class : pandas.Dataframe</span>
+<span class="sd">            Table of the docking poses with their respective</span>
+<span class="sd">            classifications, % Native Contacts and iRMSD.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">poses_CAPRI_class</span> <span class="o">=</span> <span class="n">Prot_Interface_Analysis</span><span class="o">.</span><span class="n">assign_Cn_symm_CAPRI_class</span><span class="p">(</span>
+            <span class="n">ref_pdb_file</span><span class="p">,</span> <span class="n">static_sel_str</span><span class="p">,</span> <span class="n">mobile_sel_str</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">get_MDAnalysis_Wrapper</span><span class="p">())</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">poses_CAPRI_class</span></div>
+
+<div class="viewcode-block" id="DR_SIP_Membrane.run"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Membrane.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rmsd_cutoff</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">dist_rest_cutoff</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">tilt_angle_cutoff</span><span class="o">=</span><span class="mf">0.52359877559</span><span class="p">,</span> <span class="n">parallel</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cluster_RMSD_cutoff</span><span class="o">=</span><span class="mf">12.0</span><span class="p">,</span> <span class="n">dssp_path</span><span class="o">=</span><span class="s1">&#39;/opt/dssp/dssp&#39;</span><span class="p">,</span> <span class="n">helical_elements_sel_str</span><span class="o">=</span><span class="p">[]):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Executes the membrane protocol.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        rmsd_cutoff : float, optional</span>
+<span class="sd">            The C\ :sub:`n` symmetry RMSD filter cutoff value (in</span>
+<span class="sd">            Angstrom). Default is 2 Angstrom.</span>
+<span class="sd">        dist_rest_cutoff : float, optional</span>
+<span class="sd">            The distance restraints filter cutoff value (correlation).</span>
+<span class="sd">            Default correlation 0.3.</span>
+<span class="sd">        tilt_angle_cutoff : float, optional</span>
+<span class="sd">            The tilt angle filter cutoff value (radians). Defaults angle</span>
+<span class="sd">            0.52359877559 (30 degrees).</span>
+<span class="sd">        parallel : bool, optional</span>
+<span class="sd">            Sets the orientation filter to keep parallel (True) or</span>
+<span class="sd">            anti-parallel (False) poses. Defaults is True.</span>
+<span class="sd">        cluster_RMSD_cutoff : float, optional</span>
+<span class="sd">            Docking poses whose RMSD difference is &lt; cluster_RMSD_cutoff</span>
+<span class="sd">            are in the same cluster. Default cutoff 12 Angstrom.</span>
+<span class="sd">        dssp_path : str, optional</span>
+<span class="sd">            Full file path to the DSSP program. Used for secondary</span>
+<span class="sd">            structure assignment and detecting the transmembrane</span>
+<span class="sd">            helices. If helical_elements_sel_str is set, DSSP will not</span>
+<span class="sd">            be used. Default path is &#39;/opt/dssp/dssp&#39;.</span>
+<span class="sd">        helical_elements_sel_str : lists of strings, optional</span>
+<span class="sd">            Set helical_elements_sel_str to define which residues are</span>
+<span class="sd">            the transmembrane helices. List of strings for selecting</span>
+<span class="sd">            residues of transmembrane helices. Each string should</span>
+<span class="sd">            select for 1 transmembrane helix. Uses MDAnalysis&#39; selection</span>
+<span class="sd">            commands. Default is an empty list.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Get the selection, coordinates and COM of the static monomer</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">static_CA_sel</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">get_selection</span><span class="p">(</span>
+            <span class="s1">&#39;segid &#39;</span> <span class="o">+</span> <span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">static_segids</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; and name CA&#39;</span><span class="p">)</span>
+        <span class="n">static_CA_coord</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">static_CA_sel</span><span class="o">.</span><span class="n">positions</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;float64&#39;</span><span class="p">)</span>
+        <span class="n">static_CA_com</span> <span class="o">=</span> <span class="n">static_CA_coord</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">static_CA_ori_coord</span> <span class="o">=</span> <span class="n">static_CA_coord</span> <span class="o">-</span> <span class="n">static_CA_com</span>
+
+        <span class="c1"># Get the selection of the static monomer</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mobile_CA_sel</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">get_selection</span><span class="p">(</span>
+            <span class="s1">&#39;segid &#39;</span> <span class="o">+</span> <span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mobile_segids</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; and name CA&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Temp arrays to store the filter results</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_dist_rest_data</span><span class="p">:</span>
+            <span class="n">static_dist_rest_CA_coord</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_res_static_sel</span><span class="o">.</span><span class="n">positions</span>
+            <span class="n">tmp_filter_status</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;bool&#39;</span><span class="p">)</span>
+            <span class="n">tmp_filter_results</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float32&#39;</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">tmp_filter_status</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;bool&#39;</span><span class="p">)</span>
+            <span class="n">tmp_filter_results</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float32&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Run DSSP and call tilt_angle_criterion.determine_transmembrane_helices</span>
+        <span class="c1"># to determine the transmembrane helices</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">helical_elements_sel_str</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">helical_elements_sel_str</span> <span class="o">=</span> <span class="n">tilt_angle_criterion</span><span class="o">.</span><span class="n">determine_transmembrane_helices</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">static_uni</span><span class="o">.</span><span class="n">atoms</span><span class="p">,</span> <span class="n">dssp_exec</span><span class="o">=</span><span class="n">dssp_path</span><span class="p">,</span> <span class="n">min_res</span><span class="o">=</span><span class="mi">15</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">cylindrical_axis</span> <span class="o">=</span> <span class="n">tilt_angle_criterion</span><span class="o">.</span><span class="n">get_cylindrical_axis</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">static_CA_sel</span><span class="p">,</span> <span class="n">helical_elements_sel_str</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">static_orient_unit_vec</span> <span class="o">=</span> <span class="n">static_CA_ori_coord</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">/</span> \
+            <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">static_CA_ori_coord</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+        <span class="c1"># Temp arrays to store mobile coords that have passed the filters</span>
+        <span class="n">poses_mobile_coords</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span><span class="p">,</span> <span class="n">static_CA_coord</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">3</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float32&#39;</span><span class="p">)</span>
+        <span class="n">poses_mobile_coords_idx</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="k">for</span> <span class="n">pose_idx</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">get_pose_iter</span><span class="p">():</span>
+
+            <span class="c1"># Distance restraints filter</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_dist_rest_data</span><span class="p">:</span>
+                <span class="n">mobile_dist_rest_CA_coord</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_res_mobile_sel</span><span class="o">.</span><span class="n">positions</span>
+                <span class="n">current_distances</span><span class="p">,</span> <span class="n">spearman_correl</span><span class="p">,</span> <span class="n">pearson_correl</span><span class="p">,</span> <span class="n">dist_rest_pass_status</span> <span class="o">=</span> <span class="n">dist_restraints_filter</span><span class="o">.</span><span class="n">dist_restraints_filter</span><span class="p">(</span>
+                    <span class="n">static_dist_rest_CA_coord</span><span class="p">,</span> <span class="n">mobile_dist_rest_CA_coord</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_mat_idx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest</span><span class="p">,</span> <span class="n">cutoff</span><span class="o">=</span><span class="n">dist_rest_cutoff</span><span class="p">)</span>
+
+                <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_conform_dist</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_distances</span>
+                <span class="n">tmp_filter_results</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">spearman_correl</span>
+                <span class="n">tmp_filter_results</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">pearson_correl</span>
+                <span class="n">tmp_filter_status</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">dist_rest_pass_status</span>
+
+            <span class="c1"># Get the selection, coordinates and COM of the mobile monomer</span>
+            <span class="n">mobile_CA_coord</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mobile_CA_sel</span><span class="o">.</span><span class="n">positions</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span>
+                <span class="s1">&#39;float64&#39;</span><span class="p">)</span>
+            <span class="n">mobile_CA_com</span> <span class="o">=</span> <span class="n">mobile_CA_coord</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">mobile_CA_ori_coord</span> <span class="o">=</span> <span class="n">mobile_CA_coord</span> <span class="o">-</span> <span class="n">mobile_CA_com</span>
+            <span class="n">diff_vect</span> <span class="o">=</span> <span class="n">mobile_CA_com</span> <span class="o">-</span> <span class="n">static_CA_com</span>
+
+            <span class="c1"># Cn symmetry filter</span>
+            <span class="n">axis_of_rot</span><span class="p">,</span> <span class="n">static_trans_vect</span><span class="p">,</span> <span class="n">num_mers</span><span class="p">,</span> <span class="n">RMSD</span><span class="p">,</span> <span class="n">C_n_pass_status</span> <span class="o">=</span> <span class="n">Cn_symm_criterion</span><span class="o">.</span><span class="n">Cn_symm_criterion</span><span class="p">(</span>
+                <span class="n">static_CA_ori_coord</span><span class="p">,</span> <span class="n">mobile_CA_ori_coord</span><span class="p">,</span> <span class="n">diff_vect</span><span class="p">,</span> <span class="n">rmsd_cutoff</span><span class="p">)</span>
+
+            <span class="c1"># Tilt angle filter</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">axis_of_rot</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">axis_of_rot</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_vect</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">static_trans_vect</span>
+
+            <span class="n">tilt_angle</span><span class="p">,</span> <span class="n">tilt_angle_pass_status</span> <span class="o">=</span> <span class="n">tilt_angle_criterion</span><span class="o">.</span><span class="n">tilt_angle_criterion</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">cylindrical_axis</span><span class="p">,</span> <span class="n">axis_of_rot</span><span class="p">,</span> <span class="n">cutoff</span><span class="o">=</span><span class="n">tilt_angle_cutoff</span><span class="p">)</span>
+
+            <span class="c1"># Orientation filter</span>
+            <span class="n">mobile_orient_unit_vec</span> <span class="o">=</span> <span class="n">mobile_CA_coord</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">mobile_CA_com</span>
+            <span class="n">mobile_orient_unit_vec</span> <span class="o">/=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">mobile_orient_unit_vec</span><span class="p">)</span>
+
+            <span class="n">orient_pass_status</span> <span class="o">=</span> <span class="n">orientation_criterion</span><span class="o">.</span><span class="n">orientation_criterion</span><span class="p">(</span>
+                <span class="n">mobile_orient_unit_vec</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">static_orient_unit_vec</span><span class="p">,</span> <span class="n">parallel</span><span class="o">=</span><span class="n">parallel</span><span class="p">)</span>
+
+            <span class="c1"># Store filter results</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_dist_rest_data</span><span class="p">:</span>
+                <span class="n">tmp_filter_results</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">num_mers</span>
+                <span class="n">tmp_filter_results</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">RMSD</span>
+                <span class="n">tmp_filter_status</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">C_n_pass_status</span>
+
+                <span class="n">tmp_filter_results</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">4</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">tilt_angle</span><span class="p">)</span>
+                <span class="n">tmp_filter_status</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">tilt_angle_pass_status</span>
+
+                <span class="n">tmp_filter_status</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">orient_pass_status</span>
+
+                <span class="n">tmp_filter_status</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">4</span><span class="p">]</span> <span class="o">=</span> <span class="n">dist_rest_pass_status</span> <span class="o">*</span> \
+                    <span class="n">C_n_pass_status</span> <span class="o">*</span> <span class="n">tilt_angle_pass_status</span> <span class="o">*</span> <span class="n">orient_pass_status</span>
+                <span class="n">tmp_filter_results</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span>
+                                   <span class="mi">5</span><span class="p">]</span> <span class="o">=</span> <span class="n">tmp_filter_status</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">4</span><span class="p">]</span>
+
+                <span class="k">if</span> <span class="n">tmp_filter_status</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">4</span><span class="p">]:</span>
+                    <span class="n">poses_mobile_coords</span><span class="p">[</span><span class="n">poses_mobile_coords_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">mobile_CA_coord</span>
+                    <span class="n">poses_mobile_coords_idx</span> <span class="o">+=</span> <span class="mi">1</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">tmp_filter_results</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">num_mers</span>
+                <span class="n">tmp_filter_results</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">RMSD</span>
+                <span class="n">tmp_filter_status</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">C_n_pass_status</span>
+
+                <span class="n">tmp_filter_results</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">tilt_angle</span><span class="p">)</span>
+                <span class="n">tmp_filter_status</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">tilt_angle_pass_status</span>
+
+                <span class="n">tmp_filter_status</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">orient_pass_status</span>
+
+                <span class="n">tmp_filter_status</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">C_n_pass_status</span> <span class="o">*</span> \
+                    <span class="n">tilt_angle_pass_status</span> <span class="o">*</span> <span class="n">orient_pass_status</span>
+                <span class="n">tmp_filter_results</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span>
+                                   <span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">tmp_filter_status</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>
+
+                <span class="k">if</span> <span class="n">tmp_filter_status</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">3</span><span class="p">]:</span>
+                    <span class="n">poses_mobile_coords</span><span class="p">[</span><span class="n">poses_mobile_coords_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">mobile_CA_coord</span>
+                    <span class="n">poses_mobile_coords_idx</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter_data</span><span class="o">.</span><span class="n">values</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">tmp_filter_results</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter_pass_results</span><span class="o">.</span><span class="n">values</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">tmp_filter_status</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filtered_poses_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_data</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">filter_pass_results</span><span class="p">[</span><span class="s1">&#39;All Pass Status&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="s1">&#39;Filter Pass Status&#39;</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1"># Cluster remaining poses</span>
+        <span class="n">filtered_poses_dist_mat</span> <span class="o">=</span> <span class="n">struct_clustering</span><span class="o">.</span><span class="n">cal_rmsd_between_poses_membrane</span><span class="p">(</span>
+            <span class="n">static_CA_coord</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;float32&#39;</span><span class="p">),</span> <span class="n">poses_mobile_coords</span><span class="p">[:</span><span class="n">poses_mobile_coords_idx</span><span class="p">])</span>
+
+        <span class="n">clusters</span> <span class="o">=</span> <span class="n">struct_clustering</span><span class="o">.</span><span class="n">cluster_poses</span><span class="p">(</span>
+            <span class="n">filtered_poses_dist_mat</span><span class="p">,</span> <span class="n">cutoff</span><span class="o">=</span><span class="n">cluster_RMSD_cutoff</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filtered_poses_data</span><span class="p">[</span><span class="s1">&#39;Cluster ID&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">clusters</span>
+
+        <span class="c1"># Select cluster representatives, rank the clusters and return</span>
+        <span class="c1"># the final results table</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">final_results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_final_results_table</span><span class="p">(</span>
+            <span class="n">clusters</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">filtered_poses_data</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="DR_SIP_Membrane.save_data"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Membrane.save_data">[docs]</a>    <span class="k">def</span> <span class="nf">save_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Save current session to file.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        filename : str</span>
+<span class="sd">            Full file path to save to</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="s1">&#39;final_results&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+
+        <span class="n">zdock_output_file_str</span> <span class="o">=</span> <span class="n">save_load</span><span class="o">.</span><span class="n">convert_StrIO_or_file_to_str</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">zdock_output_file</span><span class="p">)</span>
+        <span class="n">static_pdb_file_str</span> <span class="o">=</span> <span class="n">save_load</span><span class="o">.</span><span class="n">convert_StrIO_or_file_to_str</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">static_pdb</span><span class="p">)</span>
+        <span class="n">mobile_pdb_file_str</span> <span class="o">=</span> <span class="n">save_load</span><span class="o">.</span><span class="n">convert_StrIO_or_file_to_str</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">mobile_pdb</span><span class="p">)</span>
+
+        <span class="n">temp_storage_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;has_dist_rest_data&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_dist_rest_data</span><span class="p">,</span> <span class="s1">&#39;static_pdb&#39;</span><span class="p">:</span> <span class="n">static_pdb_file_str</span><span class="p">,</span> <span class="s1">&#39;mobile_pdb&#39;</span><span class="p">:</span> <span class="n">mobile_pdb_file_str</span><span class="p">,</span> <span class="s1">&#39;zdock_output_file&#39;</span><span class="p">:</span> <span class="n">zdock_output_file_str</span><span class="p">,</span>
+                             <span class="s1">&#39;static_orient_unit_vec&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">static_orient_unit_vec</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="s1">&#39;trans_vect&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">trans_vect</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="s1">&#39;axis_of_rot&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">axis_of_rot</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="s1">&#39;cylindrical_axis&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">cylindrical_axis</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="s1">&#39;protocol&#39;</span><span class="p">:</span> <span class="s1">&#39;membrane&#39;</span><span class="p">}</span>
+
+        <span class="n">save_load</span><span class="o">.</span><span class="n">save_pd_table</span><span class="p">(</span>
+            <span class="n">temp_storage_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_data</span><span class="p">,</span> <span class="s1">&#39;filter_data&#39;</span><span class="p">)</span>
+        <span class="n">save_load</span><span class="o">.</span><span class="n">save_pd_table</span><span class="p">(</span>
+            <span class="n">temp_storage_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_pass_results</span><span class="p">,</span> <span class="s1">&#39;filter_pass_results&#39;</span><span class="p">)</span>
+        <span class="n">save_load</span><span class="o">.</span><span class="n">save_pd_table</span><span class="p">(</span>
+            <span class="n">temp_storage_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">filtered_poses_data</span><span class="p">,</span> <span class="s1">&#39;filtered_poses_data&#39;</span><span class="p">)</span>
+        <span class="n">save_load</span><span class="o">.</span><span class="n">save_pd_table</span><span class="p">(</span>
+            <span class="n">temp_storage_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">final_results</span><span class="p">,</span> <span class="s1">&#39;final_results&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_dist_rest_data</span><span class="p">:</span>
+            <span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;dist_rest_file&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">save_load</span><span class="o">.</span><span class="n">convert_StrIO_or_file_to_str</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_file</span><span class="p">)</span>
+            <span class="n">save_load</span><span class="o">.</span><span class="n">save_pd_table</span><span class="p">(</span>
+                <span class="n">temp_storage_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_conform_dist</span><span class="p">,</span> <span class="s1">&#39;dist_rest_conform_dist&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;poses_CAPRI_class&#39;</span><span class="p">):</span>
+            <span class="n">save_load</span><span class="o">.</span><span class="n">save_pd_table</span><span class="p">(</span>
+                <span class="n">temp_storage_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">poses_CAPRI_class</span><span class="p">,</span> <span class="s1">&#39;poses_CAPRI_class&#39;</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">output_file</span><span class="p">:</span>
+            <span class="n">output_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">zlib</span><span class="o">.</span><span class="n">compress</span><span class="p">(</span>
+                <span class="n">umsgpack</span><span class="o">.</span><span class="n">packb</span><span class="p">(</span><span class="n">temp_storage_dict</span><span class="p">),</span> <span class="mi">9</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="DR_SIP_Membrane.write_pose"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Membrane.write_pose">[docs]</a>    <span class="k">def</span> <span class="nf">write_pose</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pose_num</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Write a pose to a PDB file.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        pose_num : int</span>
+<span class="sd">            Pose number to be written out. Using ZDOCK&#39;s original</span>
+<span class="sd">            ranking as the pose number.</span>
+<span class="sd">        filename : str</span>
+<span class="sd">            Full path to the filename to store the docking pose in PDB</span>
+<span class="sd">            format.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">pose_idx</span> <span class="o">=</span> <span class="n">pose_num</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="n">order_of_symm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">filter_data</span><span class="p">[</span><span class="s1">&#39;Order of Symmetry&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">])</span>
+        <span class="n">rot_mat</span> <span class="o">=</span> <span class="n">Cn_symm_criterion</span><span class="o">.</span><span class="n">get_rot_mat_arbitrary_axis</span><span class="p">(</span>
+            <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="n">order_of_symm</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">axis_of_rot</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">])</span>
+        <span class="n">current_pos</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">static_uni</span><span class="o">.</span><span class="n">atoms</span><span class="o">.</span><span class="n">positions</span> <span class="o">-</span> \
+            <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">static_uni</span><span class="o">.</span><span class="n">atoms</span><span class="o">.</span><span class="n">center_of_mass</span><span class="p">()</span> <span class="o">+</span> \
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_vect</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">]</span>
+        <span class="n">num_atoms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">static_uni</span><span class="o">.</span><span class="n">atoms</span><span class="o">.</span><span class="n">n_atoms</span>
+
+        <span class="n">complex_uni</span> <span class="o">=</span> <span class="n">MDAnalysis</span><span class="o">.</span><span class="n">Merge</span><span class="p">(</span>
+            <span class="o">*</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">static_uni</span><span class="o">.</span><span class="n">atoms</span><span class="p">]</span> <span class="o">*</span> <span class="n">order_of_symm</span><span class="p">))</span>
+
+        <span class="n">current_select</span> <span class="o">=</span> <span class="n">complex_uni</span><span class="o">.</span><span class="n">select_atoms</span><span class="p">(</span>
+            <span class="s1">&#39;bynum 1:</span><span class="si">%d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">num_atoms</span> <span class="o">*</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="n">current_select</span><span class="o">.</span><span class="n">segments</span><span class="o">.</span><span class="n">segids</span> <span class="o">=</span> <span class="s1">&#39;A&#39;</span>
+        <span class="n">current_select</span><span class="o">.</span><span class="n">positions</span> <span class="o">=</span> <span class="n">current_pos</span>
+
+        <span class="k">for</span> <span class="n">current_subunit_id</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">order_of_symm</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="n">prev_subunit_id</span> <span class="o">=</span> <span class="n">current_subunit_id</span> <span class="o">-</span> <span class="mi">1</span>
+            <span class="n">current_pos</span> <span class="o">=</span> <span class="n">current_pos</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">rot_mat</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
+
+            <span class="n">current_select</span> <span class="o">=</span> <span class="n">complex_uni</span><span class="o">.</span><span class="n">select_atoms</span><span class="p">(</span><span class="s1">&#39;bynum </span><span class="si">%d</span><span class="s1">:</span><span class="si">%d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">num_atoms</span> <span class="o">*</span> <span class="n">prev_subunit_id</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">num_atoms</span> <span class="o">*</span> <span class="n">current_subunit_id</span><span class="p">))</span>
+            <span class="n">current_select</span><span class="o">.</span><span class="n">positions</span> <span class="o">=</span> <span class="n">current_pos</span>
+            <span class="n">current_select</span><span class="o">.</span><span class="n">segments</span><span class="o">.</span><span class="n">segids</span> <span class="o">=</span> <span class="n">string</span><span class="o">.</span><span class="n">uppercase</span><span class="p">[</span><span class="n">prev_subunit_id</span><span class="p">]</span>
+
+        <span class="n">complex_uni</span><span class="o">.</span><span class="n">atoms</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="DR_SIP_Membrane.write_topN_poses"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Membrane.write_topN_poses">[docs]</a>    <span class="k">def</span> <span class="nf">write_topN_poses</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">,</span> <span class="n">num_poses</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Write the top N docking poses to PDB.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        folder : str</span>
+<span class="sd">            Folder to write the PDB files of the top N docking poses</span>
+<span class="sd">            ranked by DR-SIP. Files are written out as Pose_1.pdb,</span>
+<span class="sd">            Pose_2.pdb, ..., Pose_N.pdb.</span>
+<span class="sd">        num_poses : int, optional</span>
+<span class="sd">            The number of top poses to write out. Default: 10</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="s1">&#39;final_results&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">final_results</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">num_poses</span><span class="p">:</span>
+            <span class="n">num_poses</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">final_results</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">xrange</span><span class="p">(</span><span class="n">num_poses</span><span class="p">):</span>
+            <span class="n">pose_num</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">final_results</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">write_pose</span><span class="p">(</span><span class="n">pose_num</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="n">folder</span><span class="p">,</span> <span class="s1">&#39;Pose_</span><span class="si">%d</span><span class="s1">.pdb&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)))</span></div></div>
+
+
+<div class="viewcode-block" id="DR_SIP_Soluble"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Soluble">[docs]</a><span class="k">class</span> <span class="nc">DR_SIP_Soluble</span><span class="p">(</span><span class="n">DR_SIP_Base</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    DR-SIP&#39;s soluble protocol.</span>
+
+<span class="sd">    Protocol uses the distance restraints filters on ZDOCK results.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    static_pdb, mobile_pdb : str</span>
+<span class="sd">        Full path to the static and mobile monomer PDB files.</span>
+<span class="sd">    zdock_output_file : str</span>
+<span class="sd">        Full path to the ZDOCK output file.</span>
+<span class="sd">    dist_rest_file : str</span>
+<span class="sd">        Full path to the distance restraints file.</span>
+
+<span class="sd">        File is formatted such that each line corresponds to a distance</span>
+<span class="sd">        restraint (tab delimited)::</span>
+
+<span class="sd">            chain_1 resid_1 chain_2 resid_2 distance</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">static_pdb</span><span class="p">,</span> <span class="n">mobile_pdb</span><span class="p">,</span> <span class="n">zdock_output_file</span><span class="p">,</span> <span class="n">dist_rest_file</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">DR_SIP_Soluble</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">static_pdb</span><span class="p">,</span>
+                                             <span class="n">mobile_pdb</span><span class="p">,</span> <span class="n">zdock_output_file</span><span class="p">,</span> <span class="n">dist_rest_file</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter_data</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float32&#39;</span><span class="p">),</span> <span class="n">index</span><span class="o">=</span><span class="nb">range</span><span class="p">(</span>
+            <span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;smFRET Spearman Corr&#39;</span><span class="p">,</span> <span class="s1">&#39;smFRET Pearson Corr&#39;</span><span class="p">,</span> <span class="s1">&#39;Filter Pass Status&#39;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter_data</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;ZDOCK Rank&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter_pass_results</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;bool&#39;</span><span class="p">),</span> <span class="n">index</span><span class="o">=</span><span class="nb">range</span><span class="p">(</span>
+            <span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;smFRET Pass Status&#39;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter_pass_results</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;ZDOCK Rank&#39;</span>
+
+<div class="viewcode-block" id="DR_SIP_Soluble.run"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Soluble.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dist_rest_cutoff</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">cluster_RMSD_cutoff</span><span class="o">=</span><span class="mf">12.0</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Executes the soluble protocol.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        dist_rest_cutoff : float, optional</span>
+<span class="sd">            The distance restraints filter cutoff value (correlation).</span>
+<span class="sd">            Default correlation 0.3.</span>
+<span class="sd">        cluster_RMSD_cutoff : float, optional</span>
+<span class="sd">            Docking poses whose RMSD difference is &lt; cluster_RMSD_cutoff</span>
+<span class="sd">            are in the same cluster. Default cutoff 12 Angstrom.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Get the selection, coordinates and COM of the static monomer</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">static_CA_sel</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">static_uni</span><span class="o">.</span><span class="n">select_atoms</span><span class="p">(</span>
+            <span class="s1">&#39;name CA&#39;</span><span class="p">)</span>
+        <span class="n">static_CA_coord</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">static_CA_sel</span><span class="o">.</span><span class="n">positions</span>
+        <span class="n">static_dist_rest_CA_coord</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_res_static_sel</span><span class="o">.</span><span class="n">positions</span>
+
+        <span class="c1"># Temp arrays to store the filter results</span>
+        <span class="n">tmp_filter_status</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;bool&#39;</span><span class="p">)</span>
+        <span class="n">tmp_filter_results</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float32&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Temp arrays to store mobile coords that have passed the filters</span>
+        <span class="n">poses_mobile_coords</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">total_num_poses</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">mobile_uni</span><span class="o">.</span><span class="n">select_atoms</span><span class="p">(</span>
+            <span class="s1">&#39;name CA&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">positions</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">3</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float32&#39;</span><span class="p">)</span>
+        <span class="n">poses_mobile_coords_idx</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">mobile_CA_sel</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">get_selection</span><span class="p">(</span>
+            <span class="s1">&#39;segid &#39;</span> <span class="o">+</span> <span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mobile_segids</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; and name CA&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">pose_idx</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">get_pose_iter</span><span class="p">():</span>
+
+            <span class="c1"># Get the coordinates and COM of the mobile monomer</span>
+            <span class="n">mobile_CA_coord</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mobile_CA_sel</span><span class="o">.</span><span class="n">positions</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span>
+                <span class="s1">&#39;float64&#39;</span><span class="p">)</span>
+            <span class="n">mobile_dist_rest_CA_coord</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_res_mobile_sel</span><span class="o">.</span><span class="n">positions</span>
+
+            <span class="c1"># Distance restraints filter</span>
+            <span class="n">current_distances</span><span class="p">,</span> <span class="n">spearman_correl</span><span class="p">,</span> <span class="n">pearson_correl</span><span class="p">,</span> <span class="n">dist_rest_pass_status</span> <span class="o">=</span> <span class="n">dist_restraints_filter</span><span class="o">.</span><span class="n">dist_restraints_filter</span><span class="p">(</span>
+                <span class="n">static_dist_rest_CA_coord</span><span class="p">,</span> <span class="n">mobile_dist_rest_CA_coord</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_mat_idx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest</span><span class="p">,</span> <span class="n">cutoff</span><span class="o">=</span><span class="n">dist_rest_cutoff</span><span class="p">)</span>
+
+            <span class="c1"># Store filter results</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_conform_dist</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_distances</span>
+            <span class="n">tmp_filter_results</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">spearman_correl</span>
+            <span class="n">tmp_filter_results</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">pearson_correl</span>
+            <span class="n">tmp_filter_results</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">dist_rest_pass_status</span>
+            <span class="n">tmp_filter_status</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">dist_rest_pass_status</span>
+
+            <span class="k">if</span> <span class="n">tmp_filter_status</span><span class="p">[</span><span class="n">pose_idx</span><span class="p">]:</span>
+                <span class="n">poses_mobile_coords</span><span class="p">[</span><span class="n">poses_mobile_coords_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">mobile_CA_coord</span>
+                <span class="n">poses_mobile_coords_idx</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter_data</span><span class="o">.</span><span class="n">values</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">tmp_filter_results</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter_pass_results</span><span class="o">.</span><span class="n">values</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">tmp_filter_status</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filtered_poses_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_data</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">filter_pass_results</span><span class="p">[</span><span class="s1">&#39;smFRET Pass Status&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="s1">&#39;Filter Pass Status&#39;</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1"># Cluster remaining poses</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filtered_poses_dist_mat</span> <span class="o">=</span> <span class="n">struct_clustering</span><span class="o">.</span><span class="n">cal_rmsd_between_poses_soluble</span><span class="p">(</span>
+            <span class="n">static_CA_coord</span><span class="p">,</span> <span class="n">poses_mobile_coords</span><span class="p">[:</span><span class="n">poses_mobile_coords_idx</span><span class="p">])</span>
+
+        <span class="n">clusters</span> <span class="o">=</span> <span class="n">struct_clustering</span><span class="o">.</span><span class="n">cluster_poses</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">filtered_poses_dist_mat</span><span class="p">,</span> <span class="n">cutoff</span><span class="o">=</span><span class="n">cluster_RMSD_cutoff</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filtered_poses_data</span><span class="p">[</span><span class="s1">&#39;Cluster ID&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">clusters</span>
+
+        <span class="c1"># Select cluster representatives, rank the clusters and return</span>
+        <span class="c1"># the final results table</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">final_results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_final_results_table</span><span class="p">(</span>
+            <span class="n">clusters</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">filtered_poses_data</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="DR_SIP_Soluble.get_final_results_table"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Soluble.get_final_results_table">[docs]</a>    <span class="k">def</span> <span class="nf">get_final_results_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clusters</span><span class="p">,</span> <span class="n">filtered_poses_data</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns the final results table.</span>
+
+<span class="sd">        Table contains the representative poses of each cluster ranked</span>
+<span class="sd">        based on the size of the clusters (in ascending order). For each</span>
+<span class="sd">        representative pose the Cluster ID, Order of Symmetry, Subunit</span>
+<span class="sd">        RMSD, Tilt Angle, Dist Rest Pearson Corr and Dist Rest Spearman</span>
+<span class="sd">        Corr are included in the table.</span>
+
+<span class="sd">        The representative pose of each cluster has the highest Spearman</span>
+<span class="sd">        correlation. If there are more than one pose with the same</span>
+<span class="sd">        correlation, the one with the highest Pearson correlation was</span>
+<span class="sd">        chosen.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        clusters : list of int</span>
+<span class="sd">            List containing the cluster numbers of each pose.</span>
+<span class="sd">        filtered_poses_data : pandas.Dataframe</span>
+<span class="sd">            Table containing the filter data and cluster assignment of</span>
+<span class="sd">            each pose.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        results_table : pandas.Dataframe</span>
+<span class="sd">            Table of the representative poses ranked by cluster size.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">cluster_counts</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">(</span><span class="n">clusters</span><span class="p">)</span>
+        <span class="n">final_table</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">cluster_num</span><span class="p">,</span> <span class="n">counts</span> <span class="ow">in</span> <span class="n">cluster_counts</span><span class="o">.</span><span class="n">most_common</span><span class="p">():</span>
+
+            <span class="k">if</span> <span class="n">counts</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="k">break</span>
+
+            <span class="n">cluster_members</span> <span class="o">=</span> <span class="n">filtered_poses_data</span><span class="p">[</span><span class="n">filtered_poses_data</span><span class="p">[</span><span class="s1">&#39;Cluster ID&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">cluster_num</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span>
+            <span class="p">)</span>
+            <span class="n">cluster_members_max_Spearman</span> <span class="o">=</span> <span class="n">cluster_members</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span>
+                <span class="n">cluster_members</span><span class="p">[</span><span class="s1">&#39;smFRET Spearman Corr&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">cluster_members</span><span class="p">[</span><span class="s1">&#39;smFRET Spearman Corr&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">())</span> <span class="o">&lt;</span> <span class="mi">10</span><span class="o">**</span><span class="p">(</span><span class="o">-</span><span class="mi">5</span><span class="p">)]</span>
+
+            <span class="k">if</span> <span class="n">cluster_members_max_Spearman</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">final_table</span> <span class="o">=</span> <span class="n">final_table</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">cluster_members_max_Spearman</span><span class="p">)</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">final_table</span> <span class="o">=</span> <span class="n">final_table</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">cluster_members_max_Spearman</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">cluster_members_max_Spearman</span><span class="p">[</span><span class="s1">&#39;smFRET Pearson Corr&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">idxmax</span><span class="p">()])</span>
+
+        <span class="n">final_table</span><span class="p">[</span><span class="s1">&#39;DRSIP Rank&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">final_table</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">final_table</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;ZDOCK Rank&#39;</span>
+
+        <span class="k">return</span> <span class="n">final_table</span></div>
+
+<div class="viewcode-block" id="DR_SIP_Soluble.calc_CAPRI_class"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Soluble.calc_CAPRI_class">[docs]</a>    <span class="k">def</span> <span class="nf">calc_CAPRI_class</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ref_pdb_file</span><span class="p">,</span> <span class="n">static_sel_str</span><span class="p">,</span> <span class="n">mobile_sel_str</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Classify each docking pose to one of four CAPRI classes.</span>
+
+<span class="sd">        Each docking pose is compared to the reference pose in</span>
+<span class="sd">        ref_pdb_file and assigned to one of the following classes:</span>
+<span class="sd">        &#39;Incorrect&#39;, &#39;Acceptable&#39;, &#39;Medium&#39; or &#39;High&#39;.</span>
+
+<span class="sd">        Uses the CAPRI criteria to classify the poses. See</span>
+<span class="sd">        :ref:`Prot_Interface_Analysis.CAPRI_Criteria.calc_CAPRI_class`.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        ref_pdb_file : str</span>
+<span class="sd">            Full file path to PDB file containing the reference pose.</span>
+<span class="sd">        static_sel_str, mobile_sel_str : str</span>
+<span class="sd">            MDAnalysis style selection string to select the atoms in</span>
+<span class="sd">            ref_pdb_file that corresponds to the static and mobile</span>
+<span class="sd">            monomer, respectively.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        CAPRI_class : pandas.Dataframe</span>
+<span class="sd">            Table of the docking poses with their respective</span>
+<span class="sd">            classifications, % Native Contacts and iRMSD.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">poses_CAPRI_class</span> <span class="o">=</span> <span class="n">Prot_Interface_Analysis</span><span class="o">.</span><span class="n">assign_soluble_CAPRI_class</span><span class="p">(</span>
+            <span class="n">ref_pdb_file</span><span class="p">,</span> <span class="n">static_sel_str</span><span class="p">,</span> <span class="n">mobile_sel_str</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">get_MDAnalysis_Wrapper</span><span class="p">())</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">poses_CAPRI_class</span></div>
+
+<div class="viewcode-block" id="DR_SIP_Soluble.save_data"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Soluble.save_data">[docs]</a>    <span class="k">def</span> <span class="nf">save_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Save current session to file.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        filename : str</span>
+<span class="sd">            Full file path to save to</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="s1">&#39;final_results&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+
+        <span class="n">zdock_output_file_str</span> <span class="o">=</span> <span class="n">save_load</span><span class="o">.</span><span class="n">convert_StrIO_or_file_to_str</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">zdock_output_file</span><span class="p">)</span>
+        <span class="n">static_pdb_file_str</span> <span class="o">=</span> <span class="n">save_load</span><span class="o">.</span><span class="n">convert_StrIO_or_file_to_str</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">static_pdb</span><span class="p">)</span>
+        <span class="n">mobile_pdb_file_str</span> <span class="o">=</span> <span class="n">save_load</span><span class="o">.</span><span class="n">convert_StrIO_or_file_to_str</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">mobile_pdb</span><span class="p">)</span>
+
+        <span class="n">temp_storage_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;has_dist_rest_data&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_dist_rest_data</span><span class="p">,</span> <span class="s1">&#39;static_pdb&#39;</span><span class="p">:</span> <span class="n">static_pdb_file_str</span><span class="p">,</span>
+                             <span class="s1">&#39;mobile_pdb&#39;</span><span class="p">:</span> <span class="n">mobile_pdb_file_str</span><span class="p">,</span> <span class="s1">&#39;zdock_output_file&#39;</span><span class="p">:</span> <span class="n">zdock_output_file_str</span><span class="p">,</span> <span class="s1">&#39;protocol&#39;</span><span class="p">:</span> <span class="s1">&#39;soluble&#39;</span><span class="p">}</span>
+
+        <span class="n">save_load</span><span class="o">.</span><span class="n">save_pd_table</span><span class="p">(</span>
+            <span class="n">temp_storage_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_data</span><span class="p">,</span> <span class="s1">&#39;filter_data&#39;</span><span class="p">)</span>
+        <span class="n">save_load</span><span class="o">.</span><span class="n">save_pd_table</span><span class="p">(</span>
+            <span class="n">temp_storage_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_pass_results</span><span class="p">,</span> <span class="s1">&#39;filter_pass_results&#39;</span><span class="p">)</span>
+        <span class="n">save_load</span><span class="o">.</span><span class="n">save_pd_table</span><span class="p">(</span>
+            <span class="n">temp_storage_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">filtered_poses_data</span><span class="p">,</span> <span class="s1">&#39;filtered_poses_data&#39;</span><span class="p">)</span>
+        <span class="n">save_load</span><span class="o">.</span><span class="n">save_pd_table</span><span class="p">(</span>
+            <span class="n">temp_storage_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">final_results</span><span class="p">,</span> <span class="s1">&#39;final_results&#39;</span><span class="p">)</span>
+
+        <span class="n">temp_storage_dict</span><span class="p">[</span><span class="s1">&#39;dist_rest_file&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">save_load</span><span class="o">.</span><span class="n">convert_StrIO_or_file_to_str</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_file</span><span class="p">)</span>
+        <span class="n">save_load</span><span class="o">.</span><span class="n">save_pd_table</span><span class="p">(</span>
+            <span class="n">temp_storage_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_rest_conform_dist</span><span class="p">,</span> <span class="s1">&#39;dist_rest_conform_dist&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;poses_CAPRI_class&#39;</span><span class="p">):</span>
+            <span class="n">save_load</span><span class="o">.</span><span class="n">save_pd_table</span><span class="p">(</span>
+                <span class="n">temp_storage_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">poses_CAPRI_class</span><span class="p">,</span> <span class="s1">&#39;poses_CAPRI_class&#39;</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">output_file</span><span class="p">:</span>
+            <span class="n">output_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">zlib</span><span class="o">.</span><span class="n">compress</span><span class="p">(</span>
+                <span class="n">umsgpack</span><span class="o">.</span><span class="n">packb</span><span class="p">(</span><span class="n">temp_storage_dict</span><span class="p">),</span> <span class="mi">9</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="DR_SIP_Soluble.write_pose"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Soluble.write_pose">[docs]</a>    <span class="k">def</span> <span class="nf">write_pose</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pose_num</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Write a pose to a PDB file.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        pose_num : int</span>
+<span class="sd">            Pose number to be written out. Using ZDOCK&#39;s original</span>
+<span class="sd">            ranking as the pose number.</span>
+<span class="sd">        filename : str</span>
+<span class="sd">            Full path to the filename to store the docking pose in PDB</span>
+<span class="sd">            format.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">zdock_obj</span><span class="o">.</span><span class="n">write_pose</span><span class="p">(</span><span class="n">pose_num</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">mobile_only</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="DR_SIP_Soluble.write_topN_poses"><a class="viewcode-back" href="../init.html#drsip.DR_SIP_Soluble.write_topN_poses">[docs]</a>    <span class="k">def</span> <span class="nf">write_topN_poses</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">,</span> <span class="n">num_poses</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Write the top N docking poses to PDB.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        folder : str</span>
+<span class="sd">            Folder to write the PDB files of the top N docking poses</span>
+<span class="sd">            ranked by DR-SIP. Files are written out as Pose_1.pdb,</span>
+<span class="sd">            Pose_2.pdb, ..., Pose_N.pdb.</span>
+<span class="sd">        num_poses : int, optional</span>
+<span class="sd">            The number of top poses to write out. Default: 10</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="s1">&#39;final_results&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">final_results</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">num_poses</span><span class="p">:</span>
+            <span class="n">num_poses</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">final_results</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">xrange</span><span class="p">(</span><span class="n">num_poses</span><span class="p">):</span>
+            <span class="n">pose_num</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">final_results</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">write_pose</span><span class="p">(</span><span class="n">pose_num</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="n">folder</span><span class="p">,</span> <span class="s1">&#39;Pose_</span><span class="si">%d</span><span class="s1">.pdb&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)))</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Justin Chan.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
