@@ -1,8 +1,0 @@
-.. _What-the:
-
-What
-*********
-
-
-| The :func:`woot.Hello.lol` function can be used for ...
-| what

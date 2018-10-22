@@ -6,13 +6,14 @@
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>drsip.struct_clustering &#8212; smFIRST 1.0 documentation</title>
+    <title>drsip.struct_clustering &#8212; drsip 0.5 documentation</title>
     <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
-    <script type="text/javascript" src="../../_static/documentation_options.js"></script>
+    <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
     <script type="text/javascript" src="../../_static/jquery.js"></script>
     <script type="text/javascript" src="../../_static/underscore.js"></script>
     <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
    
@@ -27,6 +28,8 @@
     <div class="document">
       <div class="documentwrapper">
         <div class="bodywrapper">
+          
+
           <div class="body" role="main">
             
   <h1>Source code for drsip.struct_clustering</h1><div class="highlight"><pre>
@@ -55,7 +58,7 @@
 <span class="kn">import</span> <span class="nn">scipy.cluster</span>
 <span class="kn">import</span> <span class="nn">scipy.spatial.distance</span>
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">import</span> <span class="nn">common</span>
+<span class="kn">import</span> <span class="nn">drsip_common</span>
 
 
 <div class="viewcode-block" id="min_dist"><a class="viewcode-back" href="../../init.html#drsip.struct_clustering.min_dist">[docs]</a><span class="k">def</span> <span class="nf">min_dist</span><span class="p">(</span><span class="n">dist_mat_1</span><span class="p">,</span> <span class="n">dist_mat_2</span><span class="p">):</span>
@@ -267,7 +270,7 @@
         <span class="c1"># Superimpose the mobile monomer (pose 1) to the static monomer</span>
         <span class="c1"># (pose 2) and store the coordinates of the static monomer</span>
         <span class="c1"># (pose 1) after the superimposition.</span>
-        <span class="n">rot_mat_mobile_to_static</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">get_best_fit_rot_mat</span><span class="p">(</span>
+        <span class="n">rot_mat_mobile_to_static</span> <span class="o">=</span> <span class="n">drsip_common</span><span class="o">.</span><span class="n">get_best_fit_rot_mat</span><span class="p">(</span>
             <span class="n">poses_mobile_ori_coords</span><span class="p">[</span><span class="n">row_idx</span><span class="p">],</span> <span class="n">static_ori_coord</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;float32&#39;</span><span class="p">)</span>
         <span class="n">aln_mob_to_stat_static_coords</span><span class="p">[</span><span class="n">row_idx</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">calc_rot_static_coord</span><span class="p">(</span>
             <span class="n">static_coord</span><span class="p">,</span> <span class="n">poses_mobile_com</span><span class="p">[</span><span class="n">row_idx</span><span class="p">],</span> <span class="n">static_com</span><span class="p">,</span>
@@ -276,7 +279,7 @@
         <span class="k">for</span> <span class="n">col_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">row_idx</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">num_poses</span><span class="p">):</span>
             <span class="c1"># Superimpose the 2 poses at the mobile monomers and store</span>
             <span class="c1"># the static monomer after superimposition.</span>
-            <span class="n">rot_mat_mobile_to_mobile</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">get_best_fit_rot_mat</span><span class="p">(</span>
+            <span class="n">rot_mat_mobile_to_mobile</span> <span class="o">=</span> <span class="n">drsip_common</span><span class="o">.</span><span class="n">get_best_fit_rot_mat</span><span class="p">(</span>
                 <span class="n">poses_mobile_ori_coords</span><span class="p">[</span><span class="n">row_idx</span><span class="p">],</span>
                 <span class="n">poses_mobile_ori_coords</span><span class="p">[</span><span class="n">col_idx</span><span class="p">])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;float32&#39;</span><span class="p">)</span>
             <span class="n">aln_mob_to_mob_static_coord</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">calc_rot_static_coord</span><span class="p">(</span>
@@ -335,10 +338,27 @@
 </pre></div>
 
           </div>
+          
         </div>
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
-        <div class="sphinxsidebarwrapper"><div class="relations">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">drsip</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../init.html">Init</a></li>
+</ul>
+
+<div class="relations">
 <h3>Related Topics</h3>
 <ul>
   <li><a href="../../index.html">Documentation overview</a><ul>
@@ -361,6 +381,14 @@
     </div>
 </div>
 <script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
         </div>
       </div>
       <div class="clearer"></div>
@@ -369,8 +397,8 @@
       &copy;2018, Justin Chan.
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.4</a>
-      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
       
     </div>
 
