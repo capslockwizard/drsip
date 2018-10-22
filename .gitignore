@@ -111,7 +111,7 @@ venv.bak/
 dmypy.json
 
 # Ignore folder for building pip/conda packages
-pkg/
+package/
 
 # Ignore vscode folder
 .vscode/
