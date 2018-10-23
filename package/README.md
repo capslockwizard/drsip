@@ -1,3 +1,0 @@
-# DRSIP
-
-DRSIP docking package!

@@ -5,13 +5,13 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="drsip",
-    version="0.6",
+    version="0.8",
     author="Justin Chan",
     author_email="capslockwizard@gmail.com",
     description="DRSIP docking package",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/pypa/sampleproject",
+    url="https://github.com/capslockwizard/drsip/",
     packages=setuptools.find_packages(),
     install_requires=['zdock-parser','numba', 'numpy', 'scipy', 'pandas', 'u-msgpack-python', 'MDAnalysis', 'biopython', 'drsip-common', 'docking-eval'],
     classifiers=[
@@ -23,5 +23,5 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    scripts=['bin/drsip.py'],
+    scripts=['bin/drsip'],
 )
