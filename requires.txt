@@ -1,0 +1,10 @@
+zdock-parser
+numba
+numpy
+scipy
+pandas
+u-msgpack-python
+MDAnalysis
+biopython
+drsip-common
+docking-eval
