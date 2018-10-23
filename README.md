@@ -35,7 +35,7 @@ Example:
 ./drsip_cli.py 2oar_static_marked.pdb 2oar_mobile_marked.pdb MscL_54000_ZDOCK.out -d MscL_FRET_Data.txt --trans-helix "13-46, 69-98" -o MscL/DRSIP_results.xlsx -p MscL/
 ```
 
-For more details see the [Documentation](https://capslockwizard.github.io/drsip/) or ./drsip_cli.py -h
+For more details see the [Documentation](http://drsip.readthedocs.io/) or ./drsip_cli.py -h
 
 # Documentation
-See here for the [full documentation](https://capslockwizard.github.io/drsip/)
+See here for the [full documentation](http://drsip.readthedocs.io/)
