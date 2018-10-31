@@ -8,3 +8,5 @@ MDAnalysis
 biopython
 drsip-common
 docking-eval
+openpyxl
+duecredit
