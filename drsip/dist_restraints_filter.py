@@ -51,7 +51,7 @@ def dist_restraints_filter(static_coord, mobile_coord, dist_mat_idx, dist_rest_d
     """
     dist_mat = distances.distance_array(static_coord, mobile_coord)
 
-    current_distances = dist_mat[dist_mat_idx]
+    current_distances = dist_mat[tuple(dist_mat_idx)]
     spearman_correl = stats.pearsonr(stats.rankdata(
         dist_rest_data), stats.rankdata(current_distances))[0]
     pearson_correl = stats.pearsonr(dist_rest_data, current_distances)[0]
@@ -63,7 +63,7 @@ def dist_restraints_filter(static_coord, mobile_coord, dist_mat_idx, dist_rest_d
 def dist_restraints_filter_pearson_only(static_coord, mobile_coord, dist_mat_idx, dist_rest_data, cutoff=0.3):
     dist_mat = distances.distance_array(static_coord, mobile_coord)
 
-    current_distances = dist_mat[dist_mat_idx]
+    current_distances = dist_mat[tuple(dist_mat_idx)]
     pearson_correl = stats.pearsonr(dist_rest_data, current_distances)[0]
     pass_status = pearson_correl > cutoff
 

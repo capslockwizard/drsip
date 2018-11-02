@@ -444,7 +444,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
             consensus_cluster_members['C-n Symm Rank'] = np.argsort(
                 consensus_cluster_members['Cn Symm RMSD'].values)
             final_table = final_table.append(
-                consensus_cluster_members.sort_values('C-n Symm Rank').iloc[0].copy())
+                consensus_cluster_members.sort_values('C-n Symm Rank').iloc[0].copy(), sort=True)
 
         if final_table.shape[0] != 0:
             final_table.drop('C-n Symm Rank', axis=1, inplace=True)
@@ -927,11 +927,11 @@ class DR_SIP_Soluble(DR_SIP_Base):
 
             if cluster_members_max_Spearman.shape[0] == 1:
                 final_table = final_table.append(
-                    cluster_members_max_Spearman)
+                    cluster_members_max_Spearman, sort=True)
 
             else:
                 final_table = final_table.append(
-                    cluster_members_max_Spearman.loc[cluster_members_max_Spearman['DR Pearson Corr'].idxmax()])
+                    cluster_members_max_Spearman.loc[cluster_members_max_Spearman['DR Pearson Corr'].idxmax()], sort=True)
 
         if final_table.shape[0] != 0:
             final_table['DRSIP Rank'] = range(1, final_table.shape[0]+1)

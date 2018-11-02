@@ -1,6 +1,14 @@
 #!/usr/bin/env python
 import argparse
 import drsip
+import sys
+
+
+class DRSIP_Parser(argparse.ArgumentParser):
+    def error(self, message):
+        sys.stderr.write('error: %s\n' % message)
+        self.print_help()
+        sys.exit(2)
 
 
 def drsip_soluble(args):
@@ -40,12 +48,12 @@ def final_results(args, drsip_obj):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
+    parser = DRSIP_Parser(
         description='DRSIP: Distance Restraints- and Cyclic Symmetry-Imposed Packing.\n\nPredicts the quaternary structure of Homo-oligomeric Transmembrane Proteins (HoTPs) assuming the complex is Cn-symmetric.')
     subparsers = parser.add_subparsers()
 
     soluble_subparser = subparsers.add_parser(
-        'soluble', help='Use DRSIP\'s soluble protein docking protocol')
+        'soluble', help='Use DRSIP\'s soluble protein docking protocol. See: "drsip soluble -h" for more details')
     soluble_subparser.add_argument(
         'static_pdb', help='Static monomer PDB file')
     soluble_subparser.add_argument(
@@ -65,7 +73,7 @@ if __name__ == '__main__':
     soluble_subparser.set_defaults(func=drsip_soluble)
 
     membrane_subparser = subparsers.add_parser(
-        'membrane', help='Use DRSIP\'s membrane protein docking protocol')
+        'membrane', help='Use DRSIP\'s membrane protein docking protocol. See: "drsip membrane -h" for more details')
     membrane_subparser.add_argument(
         'static_pdb', help='Static monomer PDB file')
     membrane_subparser.add_argument(
@@ -94,38 +102,3 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     args.func(args)
-    # print args
-    # if args.soluble:
-
-    #     if args.dist_rest_file == '':
-    #         parser.error(
-    #             "--soluble requires a valid distance restraints file set with -d")
-
-    # else:
-
-    #     if len(args.dssp_path) == 0 and len(args.trans_helix) == 0:
-    #         parser.error(
-    #             "The transmembrane protocol requires the path of the DSSP program (--dssp) or the list of transmembrane helices (--trans-helix)")
-
-    # drsip_obj = drsip.DR_SIP(args.static_pdb, args.mobile_pdb,
-    #                          args.zdock_output_file, args.dist_rest_file, args.soluble)
-
-    # if not args.soluble:
-
-    #     if len(args.trans_helix) > 0:
-    #         helical_elements_sel_str = ['resid %s' %
-    #                                     x.strip() for x in args.trans_helix.split()]
-
-    #         drsip_obj.run(helical_elements_sel_str=helical_elements_sel_str)
-
-    #     else:
-    #         drsip_obj.run(dssp_path=args.dssp_path)
-
-    # else:
-    #     drsip_obj.run()
-
-    # if len(args.save_file) != 0:
-    #     drsip_obj.save_data(args.save_file)
-
-    # drsip_obj.final_results.to_excel(args.output_file)
-    # drsip_obj.write_topN_poses(args.poses_folder, num_poses=args.num_poses)
