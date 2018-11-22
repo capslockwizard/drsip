@@ -74,7 +74,9 @@ Full documentation available [here](http://drsip.readthedocs.io/)
 # How to Cite Us?
 If you use any part of the DR-SIP package please cite us by:
 ```
-Chan Justin, Chien Chi-Hong Chang, Zou Jinhao, Pan Rong-Long, Yang Lee-Wei. (2018) DR-SIP: Protocols for Higher Order Structure Modeling with Distance Restraints- and Cyclic Symmetry-Imposed Packing. Manuscript in preperation.
+Chan Justin, Chien Chi-Hong Chang, Zou Jinhao, Pan Rong-Long, Yang Lee-Wei.
+(2018) DR-SIP: Protocols for Higher Order Structure Modeling with Distance
+Restraints- and Cyclic Symmetry-Imposed Packing. Manuscript in preperation.
 ```
 
 # References
