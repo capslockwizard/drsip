@@ -7,7 +7,7 @@ The DR-SIP package contains 4 Python modules:
 3. docking-eval: Implements the CAPRI criteria to evaluate docking results with respect to a reference structure. 
 4. drsip-common: Common functions used by the other modules.
 
-If you're using any of our packages please [cite us](#How%20to%20Cite%3F)
+If you're using any of our packages please [cite us](#How-to%20Cite%20Us%3F)
 
 # How to Install DR-SIP?
 There are 2 ways to install the DR-SIP, using conda (recommended) or pip.
