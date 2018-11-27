@@ -112,6 +112,7 @@ dmypy.json
 
 # Ignore test folder
 test/
+bak/
 
 # Ignore vscode folder
 .vscode/
