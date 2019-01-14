@@ -352,7 +352,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
     """
     DR-SIP's membrane protocol.
 
-    Protocol applies the C\ :sub:n symmetry, tilt angle and
+    Protocol applies the C\ :sub:`n` symmetry, tilt angle and
     distance restraints (optional) filters on docking poses.
 
     Currently, only supports docking results from ZDOCK 3.0.2.
@@ -414,7 +414,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
         Table contains the representative poses of each cluster ranked
         based on the size of the clusters (in descending order). For each
         representative pose the Cluster ID, Order of Symmetry,
-        C\ :sub:n symmetry RMSD, Tilt Angle, Pearson and Spearman
+        C\ :sub:`n` symmetry RMSD, Tilt Angle, Pearson and Spearman
         correlations are included in the table.
 
         The representative pose of each cluster are chosen based on 2
@@ -488,7 +488,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
             ref_pdb_file that corresponds to the static and mobile
             monomer, respectively.
         num_mers : int
-            The size of the original C\ :sub:n symmetric HoTP complex. 
+            The size of the original C\ :sub:`n` symmetric HoTP complex. 
 
         Returns
         -------
@@ -699,10 +699,10 @@ class DR_SIP_Membrane(DR_SIP_Base):
                 umsgpack.packb(temp_storage_dict), 9))
 
     def write_pose(self, pose_num, filename):
-        """Write a C\ :sub:n symmetric complex to a PDB file.
+        """Write a C\ :sub:`n` symmetric complex to a PDB file.
 
         Given the original rank of a ZDOCK pose, write out the closest
-        ideal C\ :sub:n symmetric complex to a PDB file.
+        ideal C\ :sub:`n` symmetric complex to a PDB file.
 
         Parameters
         ----------
@@ -741,7 +741,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
         complex_uni.atoms.write(filename)
 
     def write_topN_poses(self, folder, num_poses=20):
-        """Write the top-N C\ :sub:n symmetric complexes to PDB files.
+        """Write the top-N C\ :sub:`n` symmetric complexes to PDB files.
 
         The top-N complexes are from the DR-SIP final results table.
 

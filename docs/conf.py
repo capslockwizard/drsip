@@ -19,13 +19,13 @@ sys.path = [os.path.abspath('..'), os.path.abspath('../../drsip_common'), os.pat
 # -- Project information -----------------------------------------------------
 
 project = u'drsip'
-copyright = u'2018, Justin Chan'
+copyright = u'2019, Justin Chan'
 author = u'Justin Chan'
 
 # The short X.Y version
 version = u''
 # The full version, including alpha/beta/rc tags
-release = u'0.8'
+release = u'0.19'
 
 
 # -- General configuration ---------------------------------------------------

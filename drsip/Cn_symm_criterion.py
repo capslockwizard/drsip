@@ -36,15 +36,15 @@ def Cn_symm_criterion(static_ori_coord, mobile_ori_coord, diff_vect, cutoff=2.0)
         Vector from the center of mass (COM) of the static monomer to
         the COM of the mobile monomer.
     cutoff : float, optional
-        The C\ :sub:n symmetric RMSD cutoff. If the docking pose's
-        C\ :sub:n symmetric RMSD > cuttoff, it fails the criterion.
+        The C\ :sub:`n` symmetric RMSD cutoff. If the docking pose's
+        C\ :sub:`n` symmetric RMSD > cuttoff, it fails the criterion.
         Default cutoff is 2.0 Angstrom.
 
     Returns
     -------
     list
         Returns the axis of rotation (np.array), static monomer's
-        translation vector (np.array), number of oligomers (int), C\ :sub:n
+        translation vector (np.array), number of oligomers (int), C\ :sub:`n`
         symmetric RMSD (float) and RMSD_pass_status (bool). The
         RMSD_pass_status is True when the docking pose passes the
         criterion, otherwise False.
@@ -84,12 +84,12 @@ def Cn_symm_criterion(static_ori_coord, mobile_ori_coord, diff_vect, cutoff=2.0)
 
 def Cn_symm_RMSD(pred_mobile_coord, mobile_ori_coord, static_trans_vect, diff_vect):
     """
-    Calculate the C\ :sub:n symmetry RMSD.
+    Calculate the C\ :sub:`n` symmetry RMSD.
 
     Parameters
     ----------
     pred_mobile_coord : np.array
-        Nx3 coordinate array of the ideal C\ :sub:n symmetric mobile
+        Nx3 coordinate array of the ideal C\ :sub:`n` symmetric mobile
         monomer. Where N is the number of atoms.
     mobile_ori_coord : np.array
         Nx3 coordinate array of the mobile monomer from the docking
@@ -162,7 +162,7 @@ def get_num_mers(rot_angle):
     """
     Predict the size of the complex from the rotation angle.
 
-    The size ("n") is the number of monomers in the C\ :sub:n symmetric
+    The size ("n") is the number of monomers in the C\ :sub:`n` symmetric
     complex.
 
     Parameters
