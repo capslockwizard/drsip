@@ -379,7 +379,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
 
         if self.has_dist_rest_data:
             filter_data_num_cols = 6
-            filter_pass_results_num_cols = 5
+            filter_pass_results_num_cols = 4
             filter_data_col_names = ['DR Spearman Corr', 'DR Pearson Corr',
                                      'Order of Symmetry', 'Cn Symm RMSD', 'Tilt Angle', 'Filter Pass Status']
             filter_pass_status_col_names = ['DR Pass Status', 'Cn Symm Pass Status',
@@ -387,7 +387,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
 
         else:
             filter_data_num_cols = 4
-            filter_pass_results_num_cols = 4
+            filter_pass_results_num_cols = 3
             filter_data_col_names = [
                 'Order of Symmetry', 'Cn Symm RMSD', 'Tilt Angle', 'Filter Pass Status']
             filter_pass_status_col_names = [
@@ -464,7 +464,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
 
         return final_table
 
-    def calc_CAPRI_class(self, ref_pdb_file, static_sel_str, mobile_sel_str, num_mers):
+    def calc_CAPRI_class(self, ref_pdb_file, static_sel_str, mobile_sel_str, num_mers, transmem_helix_sel_strs=[]):
         """
         Classify each docking pose to one of four CAPRI classes.
 
@@ -488,7 +488,14 @@ class DR_SIP_Membrane(DR_SIP_Base):
             ref_pdb_file that corresponds to the static and mobile
             monomer, respectively.
         num_mers : int
-            The size of the original C\ :sub:`n` symmetric HoTP complex. 
+            The size of the original C\ :sub:`n` symmetric HoTP complex.
+        transmem_helix_sel_strs : lists of strings, optional
+            Define which residues are the transmembrane helices. Each
+            string should select for 1 transmembrane helix using the
+            MDAnalysis' `selection language <https://www.mdanalysis.org/docs/documentation_pages/selections.html>`_. Required to run the drsip
+            protocol to obtain order of symmetry for each pose. The
+            order of symmetry of each pose is used in the modified
+            CAPRI criteria for HoTPs.
 
         Returns
         -------
@@ -497,8 +504,15 @@ class DR_SIP_Membrane(DR_SIP_Base):
             classifications, % Native Contacts and iRMSD.
         """
         
-        if not self.run_status:
-            self.run()
+        if (not self.run_status) and (len(transmem_helix_sel_strs) > 0):
+            self.run(transmem_helix_sel_strs)
+
+        elif (not self.run_status) and (len(transmem_helix_sel_strs) == 0):
+            raise ValueError("CAPRI criteria for HoTPs requires the \
+            order of symmetry which is obtained by running the membrane \
+            protocol. Please provide the transmembrane helix selection \
+            strings (transmem_helix_sel_strs) which required to execute \
+            the membrane protocol.")
 
         universe = MDAnalysis.Universe(ref_pdb_file)
         self.zdock_traj_uni.trajectory[0]
@@ -508,16 +522,16 @@ class DR_SIP_Membrane(DR_SIP_Base):
 
         return self.poses_CAPRI_class
 
-    def run(self, helical_elements_sel_str, Cn_rmsd_cutoff=2.0, dist_rest_cutoff=0.3, tilt_angle_cutoff=0.610865, cluster_RMSD_cutoff=12.0):
+    def run(self, transmem_helix_sel_strs, Cn_rmsd_cutoff=2.0, dist_rest_cutoff=0.3, tilt_angle_cutoff=0.610865, cluster_RMSD_cutoff=12.0):
         """
         Executes the membrane protocol.
 
         Parameters
         ----------
-        helical_elements_sel_str : lists of strings
-            Define which residues are the transmembrane helices. List
-            of strings. Each string should select for 1 transmembrane
-            helix. Uses MDAnalysis' selection commands.
+        transmem_helix_sel_strs : lists of strings
+            Define which residues are the transmembrane helices. Each
+            string should select for 1 transmembrane helix using the
+            MDAnalysis' `selection language <https://www.mdanalysis.org/docs/documentation_pages/selections.html>`_.
         Cn_rmsd_cutoff : float, optional
             The C\ :sub:`n` symmetry RMSD filter cutoff value (in
             Angstrom). Default is 2 Angstrom.
@@ -557,7 +571,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
                 (self.total_num_poses, 4), dtype='float32')
 
         self.cylindrical_axis = tilt_angle_criterion.get_cylindrical_axis(
-            self.static_CA_sel, helical_elements_sel_str)
+            self.static_CA_sel, transmem_helix_sel_strs)
 
         self.static_orient_unit_vec = static_CA_ori_coord[0] / \
             np.linalg.norm(static_CA_ori_coord[0])
