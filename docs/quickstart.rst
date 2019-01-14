@@ -11,6 +11,8 @@ We recommend that you install the `Anaconda distribution <https://www.anaconda.c
 
 To install DR-SIP::
 
+    conda config --append channels conda-forge
+    conda config --append channels drsip
     conda install drsip
 
 Pip Installation
