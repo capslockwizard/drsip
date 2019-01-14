@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="drsip",
-    version="0.19",
+    version="0.22",
     author="Justin Chan",
     author_email="capslockwizard@gmail.com",
     description="DRSIP docking package",

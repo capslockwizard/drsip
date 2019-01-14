@@ -83,8 +83,14 @@ def load_data(filename):
     for file_var in ['static_pdb', 'mobile_pdb', 'zdock_output_file']:
         save_load.load_StrIO(temp_storage_dict, file_var)
 
+    if not soluble_state:
+        transmem_helix_sel_strs = temp_storage_dict.pop('transmem_helix_sel_strs')
+    
+    else:
+        transmem_helix_sel_strs = []
+
     drsip_inst = DR_SIP(temp_storage_dict['static_pdb'], temp_storage_dict['mobile_pdb'],
-                        temp_storage_dict['zdock_output_file'], dist_rest_file_input, soluble_state)
+                        temp_storage_dict['zdock_output_file'], dist_rest_file_input, transmem_helix_sel_strs, soluble_state)
 
     for pd_var in ['filter_data', 'filter_pass_results', 'filtered_poses_data', 'final_results']:
         save_load.load_pd_table(temp_storage_dict, pd_var, pop=True)
@@ -108,7 +114,7 @@ def load_data(filename):
     return drsip_inst
 
 
-def DR_SIP(static_pdb, mobile_pdb, zdock_output_file, dist_rest_file='', soluble=False):
+def DR_SIP(static_pdb, mobile_pdb, zdock_output_file, dist_rest_file='', transmem_helix_sel_strs=[], soluble=False):
     """
     Initialize the correct docking protocol.
 
@@ -134,21 +140,31 @@ def DR_SIP(static_pdb, mobile_pdb, zdock_output_file, dist_rest_file='', soluble
 
             chain_id_1 res_id_1 chain_id_2 res_id_2 distance
 
+    transmem_helix_sel_strs : lists of strings, optional
+        Define which residues are the transmembrane helices. Each
+        string should select for 1 transmembrane helix using the
+        MDAnalysis' `selection language <https://www.mdanalysis.org/docs/documentation_pages/selections.html>`_. Required if soluble is False.
     soluble : bool, optional
         Defaults to False, which uses DR-SIP's membrane protocol. When
         set to True, uses the membrane protocol.
     """
-    if soluble:
+    if soluble: # Soluble protocol
 
         if dist_rest_file != '':
             return DR_SIP_Soluble(static_pdb, mobile_pdb, zdock_output_file, dist_rest_file)
 
         else:
             raise IOError(
-                'No distance restraints file, please supply the path to the file')
+                'No distance restraints file')
 
-    else:
-        return DR_SIP_Membrane(static_pdb, mobile_pdb, zdock_output_file, dist_rest_file)
+    else: # Membrane protocol
+        if len(transmem_helix_sel_strs) > 0: # Check if transmem_helix_sel_strs is provided
+            return DR_SIP_Membrane(static_pdb, mobile_pdb, zdock_output_file, transmem_helix_sel_strs, dist_rest_file)
+        
+        else:
+            raise ValueError("Transmembrane helix selection strings \
+            (transmem_helix_sel_strs) are required to perform the \
+            membrane protocol.")
 
 
 class DR_SIP_Base(object):
@@ -198,6 +214,7 @@ class DR_SIP_Base(object):
             self.has_dist_rest_data = False
 
         self.run_status = False
+        self.CAPRI_assign_status = False
 
     def _parse_dist_res_input(self):
         """Parses the distance restraints input file into a Pandas table."""
@@ -281,12 +298,9 @@ class DR_SIP_Base(object):
         filename : str
             Full path to save the comma-seperated (CSV) file.
         """
-        if 'final_results' not in self.__dict__:
-            self.run()
+        raise NotImplementedError
 
-        self.final_results.to_csv(filename)
-
-    def get_final_results_table(self, clusters, filtered_poses_data):
+    def build_final_results_table(self, clusters, filtered_poses_data):
         """
         Returns the final results table.
 
@@ -308,6 +322,19 @@ class DR_SIP_Base(object):
             Final results table.
         """
         raise NotImplementedError
+
+    def get_final_results_table(self):
+        """Returns the final results table.
+
+        Returns
+        -------
+        pandas.Dataframe
+            Table of the final results.
+        """
+        if not self.run_status:
+            self.run()
+
+        return self.final_results
 
     def calc_CAPRI_class(self, ref_pdb_file, static_sel_str, mobile_sel_str):
         """
@@ -339,6 +366,26 @@ class DR_SIP_Base(object):
         """
         raise NotImplementedError
 
+    def get_CAPRI_class_table(self):
+        """Returns the CAPRI classification table.
+
+        Returns a table containing the CAPRI classification of each
+        docking pose.
+
+        Run the calc_CAPRI_class (:py:meth:`membrane <drsip.DR_SIP_Membrane.calc_CAPRI_class>` or :py:meth:`soluble <drsip.DR_SIP_Soluble.calc_CAPRI_class>`) method before
+        calling this method.
+        
+        Returns
+        -------
+        pandas.Dataframe
+            Table of the docking poses with their respective
+            classifications, % Native Contacts and iRMSD.
+        """
+        if not self.CAPRI_assign_status:
+            raise Exception('Run the calc_CAPRI_class method before running this method')
+
+        return self.poses_CAPRI_class
+
     def run(self):
         """
         Executes the docking protocol.
@@ -364,6 +411,10 @@ class DR_SIP_Membrane(DR_SIP_Base):
         monomers.
     zdock_output_file : str
         Full path to the ZDOCK 3.0.2 generated output file.
+    transmem_helix_sel_strs : lists of strings
+        Define which residues are the transmembrane helices. Each
+        string should select for 1 transmembrane helix using the
+        MDAnalysis' `selection language <https://www.mdanalysis.org/docs/documentation_pages/selections.html>`_.
     dist_rest_file : str, optional
         Full path to the distance restraints file, defaults to an empty
         string.
@@ -373,7 +424,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
 
             chain_1 resid_1 chain_2 resid_2 distance
     """
-    def __init__(self, static_pdb, mobile_pdb, zdock_output_file, dist_rest_file=''):
+    def __init__(self, static_pdb, mobile_pdb, zdock_output_file, transmem_helix_sel_strs, dist_rest_file=''):
         super(DR_SIP_Membrane, self).__init__(static_pdb,
                                               mobile_pdb, zdock_output_file, dist_rest_file)
 
@@ -407,7 +458,9 @@ class DR_SIP_Membrane(DR_SIP_Base):
             (self.total_num_poses, 3), dtype='float32')
         self.cylindrical_axis = np.zeros(3, dtype='float32')
 
-    def get_final_results_table(self, clusters, filtered_poses_data):
+        self.transmem_helix_sel_strs = transmem_helix_sel_strs
+
+    def build_final_results_table(self, clusters, filtered_poses_data):
         """
         Returns the final results table.
 
@@ -424,6 +477,8 @@ class DR_SIP_Membrane(DR_SIP_Base):
            poses that have the consensus order of symmetry are chosen.
         2. The pose with the lowest C\ :sub:`n` symmetry RMSD.
 
+        Use :py:meth:`get_final_results_table <drsip.DR_SIP_Soluble.get_final_results_table>` to return the table.
+
         Parameters
         ----------
         clusters : list of int
@@ -431,11 +486,6 @@ class DR_SIP_Membrane(DR_SIP_Base):
         filtered_poses_data : pandas.Dataframe
             Table containing the filter data and cluster number of
             each pose.
-
-        Returns
-        -------
-        results_table : pandas.Dataframe
-            Table of the representative poses ranked by cluster size.
         """
         cluster_counts = Counter(clusters)
         final_table = pd.DataFrame()
@@ -462,9 +512,9 @@ class DR_SIP_Membrane(DR_SIP_Base):
             final_table['DRSIP Rank'] = range(1, final_table.shape[0]+1)
             final_table.index.name = 'ZDOCK Rank'
 
-        return final_table
+        self.final_results = final_table.copy()
 
-    def calc_CAPRI_class(self, ref_pdb_file, static_sel_str, mobile_sel_str, num_mers, transmem_helix_sel_strs=[]):
+    def calc_CAPRI_class(self, ref_pdb_file, static_sel_str, mobile_sel_str, num_mers):
         """
         Classify each docking pose to one of four CAPRI classes.
 
@@ -489,13 +539,6 @@ class DR_SIP_Membrane(DR_SIP_Base):
             monomer, respectively.
         num_mers : int
             The size of the original C\ :sub:`n` symmetric HoTP complex.
-        transmem_helix_sel_strs : lists of strings, optional
-            Define which residues are the transmembrane helices. Each
-            string should select for 1 transmembrane helix using the
-            MDAnalysis' `selection language <https://www.mdanalysis.org/docs/documentation_pages/selections.html>`_. Required to run the drsip
-            protocol to obtain order of symmetry for each pose. The
-            order of symmetry of each pose is used in the modified
-            CAPRI criteria for HoTPs.
 
         Returns
         -------
@@ -504,15 +547,8 @@ class DR_SIP_Membrane(DR_SIP_Base):
             classifications, % Native Contacts and iRMSD.
         """
         
-        if (not self.run_status) and (len(transmem_helix_sel_strs) > 0):
-            self.run(transmem_helix_sel_strs)
-
-        elif (not self.run_status) and (len(transmem_helix_sel_strs) == 0):
-            raise ValueError("CAPRI criteria for HoTPs requires the \
-            order of symmetry which is obtained by running the membrane \
-            protocol. Please provide the transmembrane helix selection \
-            strings (transmem_helix_sel_strs) which required to execute \
-            the membrane protocol.")
+        if not self.run_status:
+            self.run()
 
         universe = MDAnalysis.Universe(ref_pdb_file)
         self.zdock_traj_uni.trajectory[0]
@@ -520,18 +556,14 @@ class DR_SIP_Membrane(DR_SIP_Base):
         self.poses_CAPRI_class = docking_eval.assign_Cn_symm_CAPRI_class(
             universe.atoms, static_sel_str, mobile_sel_str, self.zdock_traj_uni.atoms, num_mers, self.filter_data['Order of Symmetry'].values)
 
-        return self.poses_CAPRI_class
+        self.CAPRI_assign_status = True
 
-    def run(self, transmem_helix_sel_strs, Cn_rmsd_cutoff=2.0, dist_rest_cutoff=0.3, tilt_angle_cutoff=0.610865, cluster_RMSD_cutoff=12.0):
+    def run(self, Cn_rmsd_cutoff=2.0, dist_rest_cutoff=0.3, tilt_angle_cutoff=0.610865, cluster_RMSD_cutoff=12.0):
         """
         Executes the membrane protocol.
 
         Parameters
         ----------
-        transmem_helix_sel_strs : lists of strings
-            Define which residues are the transmembrane helices. Each
-            string should select for 1 transmembrane helix using the
-            MDAnalysis' `selection language <https://www.mdanalysis.org/docs/documentation_pages/selections.html>`_.
         Cn_rmsd_cutoff : float, optional
             The C\ :sub:`n` symmetry RMSD filter cutoff value (in
             Angstrom). Default is 2 Angstrom.
@@ -571,7 +603,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
                 (self.total_num_poses, 4), dtype='float32')
 
         self.cylindrical_axis = tilt_angle_criterion.get_cylindrical_axis(
-            self.static_CA_sel, transmem_helix_sel_strs)
+            self.static_CA_sel, self.transmem_helix_sel_strs)
 
         self.static_orient_unit_vec = static_CA_ori_coord[0] / \
             np.linalg.norm(static_CA_ori_coord[0])
@@ -627,7 +659,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
                 tmp_filter_results[pose_idx,
                                    5] = tmp_filter_status[pose_idx, 3]
 
-                if tmp_filter_status[pose_idx, 4]:
+                if tmp_filter_status[pose_idx, 3]:
                     poses_mobile_coords[poses_mobile_coords_idx] = mobile_CA_coord
                     poses_mobile_coords_idx += 1
 
@@ -644,7 +676,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
                 tmp_filter_results[pose_idx,
                                    3] = tmp_filter_status[pose_idx, 2]
 
-                if tmp_filter_status[pose_idx, 3]:
+                if tmp_filter_status[pose_idx, 2]:
                     poses_mobile_coords[poses_mobile_coords_idx] = mobile_CA_coord
                     poses_mobile_coords_idx += 1
 
@@ -662,11 +694,25 @@ class DR_SIP_Membrane(DR_SIP_Base):
         self.filtered_poses_data['Cluster ID'] = clusters
 
         # Select cluster representatives, then rank the clusters and
-        # return the final results table
-        self.final_results = self.get_final_results_table(
+        # build the final results table
+        self.build_final_results_table(
             clusters, self.filtered_poses_data)
 
         self.run_status = True
+
+    def write_results_file(self, filename):
+        """
+        Write the top results to a CSV file.
+
+        Parameters
+        ----------
+        filename : str
+            Full path to save the comma-seperated (CSV) file.
+        """
+        if not self.run_status:
+            self.run()
+
+        self.final_results.to_csv(filename)
 
     def save_data(self, filename):
         """Save current session/instance to file.
@@ -676,7 +722,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
         filename : str
             Full file path to save to
         """
-        if 'final_results' not in self.__dict__:
+        if not self.run_status:
             self.run()
 
         zdock_output_file_str = save_load.convert_StrIO_or_file_to_str(
@@ -687,7 +733,8 @@ class DR_SIP_Membrane(DR_SIP_Base):
             self.mobile_pdb)
 
         temp_storage_dict = {'has_dist_rest_data': self.has_dist_rest_data, 'static_pdb': static_pdb_file_str, 'mobile_pdb': mobile_pdb_file_str, 'zdock_output_file': zdock_output_file_str,
-                             'static_orient_unit_vec': self.static_orient_unit_vec.tolist(), 'trans_vect': self.trans_vect.tolist(), 'axis_of_rot': self.axis_of_rot.tolist(), 'cylindrical_axis': self.cylindrical_axis.tolist(), 'protocol': 'membrane'}
+                             'static_orient_unit_vec': self.static_orient_unit_vec.tolist(), 'trans_vect': self.trans_vect.tolist(), 'axis_of_rot': self.axis_of_rot.tolist(),
+                             'cylindrical_axis': self.cylindrical_axis.tolist(), 'protocol': 'membrane', 'transmem_helix_sel_strs': self.transmem_helix_sel_strs}
 
         save_load.save_pd_table(
             temp_storage_dict, self.filter_data, 'filter_data')
@@ -768,7 +815,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
         num_poses : int, optional
             The number of top-N poses to write out. Default: 20
         """
-        if 'final_results' not in self.__dict__:
+        if not self.run_status:
             self.run()
 
         if self.final_results.shape[0] < num_poses:
@@ -885,14 +932,30 @@ class DR_SIP_Soluble(DR_SIP_Base):
             self.filtered_poses_dist_mat, cutoff=cluster_RMSD_cutoff)
         self.filtered_poses_data['Cluster ID'] = clusters
 
-        # Select cluster representatives, rank the clusters and return
+        # Select cluster representatives, rank the clusters and build
         # the final results table
-        self.final_results = self.get_final_results_table(
+        self.build_final_results_table(
             clusters, self.filtered_poses_data)
 
-    def get_final_results_table(self, clusters, filtered_poses_data):
+        self.run_status = True
+
+    def write_results_file(self, filename):
         """
-        Returns the final results table.
+        Write the top results to a CSV file.
+
+        Parameters
+        ----------
+        filename : str
+            Full path to save the comma-seperated (CSV) file.
+        """
+        if not self.run_status:
+            self.run()
+
+        self.final_results.to_csv(filename)
+
+    def build_final_results_table(self, clusters, filtered_poses_data):
+        """
+        Build the final results table.
 
         Table contains the representative poses of each cluster ranked
         based on the size of the clusters (in descending order). For each
@@ -904,6 +967,8 @@ class DR_SIP_Soluble(DR_SIP_Base):
         highest correlation, the one with the highest Pearson
         correlation is chosen.
 
+        Use :py:meth:`get_final_results_table <drsip.DR_SIP_Soluble.get_final_results_table>` to return the table.
+
         Parameters
         ----------
         clusters : list of int
@@ -911,11 +976,6 @@ class DR_SIP_Soluble(DR_SIP_Base):
         filtered_poses_data : pandas.Dataframe
             Table containing the filter data and cluster number of
             each pose.
-
-        Returns
-        -------
-        results_table : pandas.Dataframe
-            Table of the representative poses ranked by cluster size.
         """
         cluster_counts = Counter(clusters)
         final_table = pd.DataFrame()
@@ -942,7 +1002,7 @@ class DR_SIP_Soluble(DR_SIP_Base):
             final_table['DRSIP Rank'] = range(1, final_table.shape[0]+1)
             final_table.index.name = 'ZDOCK Rank'
 
-        return final_table
+        self.final_results = final_table.copy()
 
     def calc_CAPRI_class(self, ref_pdb_file, static_sel_str, mobile_sel_str):
         """
@@ -976,6 +1036,8 @@ class DR_SIP_Soluble(DR_SIP_Base):
         self.poses_CAPRI_class = docking_eval.assign_soluble_CAPRI_class(
             universe.atoms, static_sel_str, mobile_sel_str, self.zdock_traj_uni.atoms)
 
+        self.CAPRI_assign_status = True
+
         return self.poses_CAPRI_class
 
     def save_data(self, filename):
@@ -987,7 +1049,7 @@ class DR_SIP_Soluble(DR_SIP_Base):
         filename : str
             Full file path to save to
         """
-        if 'final_results' not in self.__dict__:
+        if not self.run_status:
             self.run()
 
         zdock_output_file_str = save_load.convert_StrIO_or_file_to_str(
@@ -1048,7 +1110,7 @@ class DR_SIP_Soluble(DR_SIP_Base):
         num_poses : int, optional
             The number of top poses to write out. Default: 20
         """
-        if 'final_results' not in self.__dict__:
+        if not self.run_status:
             self.run()
 
         if self.final_results.shape[0] < num_poses:
