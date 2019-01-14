@@ -162,9 +162,9 @@ def DR_SIP(static_pdb, mobile_pdb, zdock_output_file, dist_rest_file='', transme
             return DR_SIP_Membrane(static_pdb, mobile_pdb, zdock_output_file, transmem_helix_sel_strs, dist_rest_file)
         
         else:
-            raise ValueError("Transmembrane helix selection strings \
-            (transmem_helix_sel_strs) are required to perform the \
-            membrane protocol.")
+            raise ValueError("Transmembrane helix selection strings " \
+            "(transmem_helix_sel_strs) are required to perform the " \
+            "membrane protocol.")
 
 
 class DR_SIP_Base(object):
@@ -227,8 +227,9 @@ class DR_SIP_Base(object):
         # the static monomer
         swap_rows = np.where(
             ~self.dist_rest_table['Segid 1'].isin(self.static_segids))[0]
-        self.dist_rest_table.ix[swap_rows, ['Segid 1', 'Resid 1', 'Segid 2', 'Resid 2']
-                                ] = self.dist_rest_table.ix[swap_rows, ['Segid 2', 'Resid 2', 'Segid 1', 'Resid 1']].values
+        self.dist_rest_table.iloc[swap_rows, 0:4] = \
+            self.dist_rest_table.iloc[swap_rows][['Segid 2', 'Resid 2',
+                'Segid 1', 'Resid 1']].values
 
         # Make sure each column's dtype is correct
         self.dist_rest_table = self.dist_rest_table.astype(

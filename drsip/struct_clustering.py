@@ -210,16 +210,11 @@ def cal_rmsd_between_poses_membrane(static_coord, mobile_coords):
     
     There are 4 ways to compute the RMSD between any 2 monomers, each
     chosen from one of the 2 poses:
-    1. Static monomers from both poses are superimposed and RMSD is
-    computed for the mobile monomers. No superimposition is required
-    for ZDOCK generated poses since the static monomers are fixed.
-    2. Mobile monomers from both poses are superimposed and RMSD is
-    computed for the static monomers.
-    3. A mobile monomer from one pose is superimposed onto the static
-    monomer in the second pose. The RMSD of monomers that were not
-    superimposed are computed.
-    4. The monomers used to compute the RMSD in (3) is superimposed and
-    while the other two monomers are used to compute the RMSD.
+
+    1. Static monomers from both poses are superimposed and RMSD is computed for the mobile monomers. No superimposition is required for ZDOCK generated poses since the static monomers are fixed.
+    2. Mobile monomers from both poses are superimposed and RMSD is computed for the static monomers.
+    3. A mobile monomer from one pose is superimposed onto the static monomer in the second pose. The RMSD of monomers that were not superimposed are computed.
+    4. The monomers used to compute the RMSD in (3) is superimposed and while the other two monomers are used to compute the RMSD.
 
     This function computes all 4 RMSDs and picks the smallest RMSD to
     represent the distance between these 2 poses.

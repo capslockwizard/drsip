@@ -1,4 +1,4 @@
-Init
+APIs
 ================================================================
 .. automodule:: drsip
 .. automodule:: drsip.dist_restraints_filter

@@ -29,13 +29,13 @@ pip install drsip
 # How to Use?
 ## Membrane Protein Docking Protocol
 ```
-drsip membrane static_pdb_file mobile_pdb_file zdock_output_file -d distance_restraints_file --trans-helix "13-46, 69-98" -o DRSIP_results.xlsx -p top10/
+drsip membrane static-pdb-file mobile-pdb-file trans-helix zdock-output-file -d distance-restraints-file -o DRSIP-results.csv -p top20/
 ```
-The argument for --trans-helix is a string containing comma separated resids of each transmembrane helix. In this example: The first transmembrane helix is from resid 13 to 46 and the second is from resid 69 to 98. Transmembrane helix assignments can be obtained from the [Orientations of Proteins in Membranes database](https://opm.phar.umich.edu/).
+The trans-helix argument is a string containing comma separated resids of each transmembrane helix. Example: "17-46, 69-93", where the first transmembrane helix is from resid 17 to 46 and the second is from resid 69 to 93. Transmembrane helix assignments can be obtained from the [Orientations of Proteins in Membranes database](https://opm.phar.umich.edu/).
 
-While the -o argument is for writing the results of top 10 poses to an Excel file and -p is the folder to write out the PDB files of the top 10 complexes generated from the top 10 poses.
+While the -o argument is for writing the results of top 20 poses to an CSV file and -p is the folder to write out the PDB files of the top 20 complexes generated from the top 20 poses.
 
-The distance restraints file is optional, if not provided the distance restraints filter will not be applied. Each row of the distance restraints file contains a residue pair formatted as:
+The distance restraints file is optional, the filter will not be applied if there are no distance restraints. Each line in the distance restraints file contains a residue pair formatted as:
 ```
 chainID1 resID1 chainID2 resID2 distance
 ```
@@ -43,7 +43,7 @@ NOTE: The columns are separated by tabs (tab-delimited).
 
 Example:
 ```
-drsip membrane 2oar_static_marked.pdb 2oar_mobile_marked.pdb MscL_54000_ZDOCK.out -d MscL_FRET_Data.txt --trans-helix "13-46, 69-98" -o MscL/DRSIP_results.xlsx -p MscL/
+drsip membrane 2oar-static_marked.pdb 2oar_mobile_marked.pdb "17-46, 69-93" MscL_54000_ZDOCK.out -d MscL_FRET_Data.txt -o MscL/DRSIP_results.csv -p MscL/
 ```
 
 MscL_FRET_Data.txt contains:
@@ -57,13 +57,13 @@ For more details run "drsip membrane -h" or see the [documentation](http://drsip
 
 ## Soluble Protein Protocol
 ```
-drsip soluble static_pdb_file mobile_pdb_file zdock_output_file -d distance_restraints_file -o DRSIP_results.xlsx -p top10/
+drsip soluble static-pdb-file mobile-pdb-file zdock-output-file distance-restraints-file -o DRSIP-results.csv -p top20/
 ```
-Similar to running the membrane protein docking protocol except that the  distance_restraints_file is required and there is no --trans-helix option.
+Similar to running the membrane protein docking protocol except that the distance restraints file is required and there is no trans-helix argument.
 
 Example:
 ```
-drsip soluble 5ccg_SNARE_marked.pdb 2r83_aligned_domains_marked.pdb Syt1-SNARE_ZDOCK_54000.out -d Syt1-SNARE_FRET_Data.txt -o DRSIP_soluble_results.xlsx -p Soluble_Poses/
+drsip soluble 5ccg_SNARE_marked.pdb 2r83_aligned_domains_marked.pdb Syt1-SNARE_ZDOCK_54000.out Syt1-SNARE_FRET_Data.txt -o Syt1_SNARE/DRSIP_soluble_results.csv -p Syt1_SNARE/
 ```
 
 For more details run "drsip soluble -h" or see the [documentation](http://drsip.readthedocs.io/).
@@ -75,7 +75,7 @@ Full documentation available [here](http://drsip.readthedocs.io/)
 If you use any part of the DR-SIP package please cite us by:
 ```
 Chan Justin, Chien Chi-Hong Chang, Zou Jinhao, Pan Rong-Long, Yang Lee-Wei.
-(2018) DR-SIP: Protocols for Higher Order Structure Modeling with Distance
+(2019) DR-SIP: Protocols for Higher Order Structure Modeling with Distance
 Restraints- and Cyclic Symmetry-Imposed Packing. Manuscript in preperation.
 ```
 
