@@ -38,7 +38,6 @@ import umsgpack
 import zlib
 import Cn_symm_criterion
 import dist_restraints_filter
-import orientation_criterion
 import struct_clustering
 import tilt_angle_criterion
 import save_load
@@ -116,18 +115,19 @@ def DR_SIP(static_pdb, mobile_pdb, zdock_output_file, dist_rest_file='', soluble
     The default protocol is the membrane protocol. To select the
     soluble protocol, set soluble to True.
 
+    Currently, only supports docking results from ZDOCK 3.0.2.
+
     Parameters
     ----------
     static_pdb, mobile_pdb : str
         Full path to the PDB files containing the static and mobile
         monomers.
     zdock_output_file : str
-        Full path to the ZDOCK output file. Tested on the output files
-        of ZDOCK 3.0.2.
+        Full path to the ZDOCK 3.0.2 generated output file.
     dist_rest_file : str, optional
-        Full path to the distance restraints file, defaults to empty
+        Full path to the distance restraints file, defaults to an empty
         string. When empty, the distance restraints filter is not used.
-        Must be filled in when soluble is set to True.
+        Required when soluble is set to True.
 
         File is formatted such that each line corresponds to a distance
         restraint (tab delimited)::
@@ -145,7 +145,7 @@ def DR_SIP(static_pdb, mobile_pdb, zdock_output_file, dist_rest_file='', soluble
 
         else:
             raise IOError(
-                'dist_rest_file is empty, please supply the path to the file')
+                'No distance restraints file, please supply the path to the file')
 
     else:
         return DR_SIP_Membrane(static_pdb, mobile_pdb, zdock_output_file, dist_rest_file)
@@ -160,15 +160,18 @@ class DR_SIP_Base(object):
     Parameters
     ----------
     static_pdb, mobile_pdb : str
-        Full path to the static and mobile monomer PDB files.
+        Full path to the PDB files containing the static and mobile
+        monomers.
     zdock_output_file : str
-        Full path to the ZDOCK output file.
+        Full path to the ZDOCK 3.0.2 generated output file.
     dist_rest_file : str, optional
-        Full path to the distance restraints file, defaults to empty
+        Full path to the distance restraints file, defaults to an empty
         string.
 
         File is formatted such that each line corresponds to a distance
         restraint (tab delimited)::
+
+            chain_id_1 res_id_1 chain_id_2 res_id_2 distance
 
             chain_id_1 res_id_1 chain_id_2 res_id_2 distance
     """
@@ -194,6 +197,8 @@ class DR_SIP_Base(object):
         else:
             self.has_dist_rest_data = False
 
+        self.run_status = False
+
     def _parse_dist_res_input(self):
         """Parses the distance restraints input file into a Pandas table."""
         self.dist_rest_table = pd.read_csv(
@@ -201,7 +206,8 @@ class DR_SIP_Base(object):
         self.dist_rest_table.columns = [
             'Segid 1', 'Resid 1', 'Segid 2', 'Resid 2', 'Dist']
 
-        # Swap columns of rows to make sure that the segid 1 corresponds to the static monomer
+        # Swap columns of rows to make sure that the segid 1 corresponds to
+        # the static monomer
         swap_rows = np.where(
             ~self.dist_rest_table['Segid 1'].isin(self.static_segids))[0]
         self.dist_rest_table.ix[swap_rows, ['Segid 1', 'Resid 1', 'Segid 2', 'Resid 2']
@@ -219,7 +225,7 @@ class DR_SIP_Base(object):
 
         if num_unknown_segids > 0:
             raise Exception(
-                'Invalid chains in distance restraints input data: Must be from the static/mobile structure')
+                'Invalid chain IDs in the distance restraints file: Must be from the static/mobile structure')
 
         # Check and see if there are pairs whose segids are identical
         num_identical_segids = np.where(
@@ -227,9 +233,9 @@ class DR_SIP_Base(object):
 
         if num_identical_segids > 0:
             raise Exception(
-                'Distance restraints input data contains pairs of residues with the same chain ID')
+                'Distance restraints file contains pairs of residues with the same chain ID')
 
-        # Prepare selection of residues involved in the the distance restraints
+        # Select of residues involved in the the distance restraints
         sel_str_format = '(segid {0} and resid {1})'.format
 
         static_sel_list = [sel_str_format(
@@ -251,14 +257,16 @@ class DR_SIP_Base(object):
         seg_res_2_pairs_ordered = zip(
             self.dist_res_mobile_sel.segids, self.dist_res_mobile_sel.resids)
 
-        # Indices for extracting relevent residue pairs from distance matrix
+        # Indices for extracting the relevent residue pairs from the distance
+        # matrix
         self.dist_mat_idx = [[seg_res_1_pairs_ordered.index(tuple(x[1].tolist())) for x in self.dist_rest_table.loc[:, ['Segid 1', 'Resid 1']].iterrows()], [
             seg_res_2_pairs_ordered.index(tuple(x[1].tolist())) for x in self.dist_rest_table.loc[:, ['Segid 2', 'Resid 2']].iterrows()]]
 
-        # Constraint distance data
+        # Distance restraints data
         self.dist_rest = self.dist_rest_table.loc[:, 'Dist'].values
 
-        # Initialize table to store the distances of the residue pairs for each pose
+        # Initialize table to store the distances of the residue pairs for
+        # each pose
         col_name = ['{0}-{1}-{2}-{3}'.format(*self.dist_rest_table.iloc[idx, 0:4])
                     for idx in xrange(self.dist_rest_table.shape[0])]
         self.dist_rest_conform_dist = pd.DataFrame(np.zeros(
@@ -266,17 +274,17 @@ class DR_SIP_Base(object):
 
     def write_results_file(self, filename):
         """
-        Write the top 10 results table to an Excel file.
+        Write the top results to a CSV file.
 
         Parameters
         ----------
         filename : str
-            Full path to save the Excel file to.
+            Full path to save the comma-seperated (CSV) file.
         """
         if 'final_results' not in self.__dict__:
             self.run()
 
-        self.final_results.to_excel(filename)
+        self.final_results.to_csv(filename)
 
     def get_final_results_table(self, clusters, filtered_poses_data):
         """
@@ -289,15 +297,15 @@ class DR_SIP_Base(object):
         Parameters
         ----------
         clusters : list of int
-            List containing the cluster numbers of each pose.
+            List containing the cluster number that each pose is in.
         filtered_poses_data : pandas.Dataframe
-            Table containing the filter data and cluster assignment of
+            Table containing the filter data and cluster number of
             each pose.
 
         Returns
         -------
         results_table : pandas.Dataframe
-            Table of the final ranks of the docking poses.
+            Final results table.
         """
         raise NotImplementedError
 
@@ -310,7 +318,7 @@ class DR_SIP_Base(object):
         'Incorrect', 'Acceptable', 'Medium' or 'High'.
 
         Uses the CAPRI criteria to classify the poses. See
-        :ref:`docking_eval.CAPRI_Criteria.calc_CAPRI_class`.
+        :py:class:`docking_eval.CAPRI_Criteria`.
 
         Needs to be implemented by the child class.
 
@@ -321,12 +329,12 @@ class DR_SIP_Base(object):
         static_sel_str, mobile_sel_str : str
             MDAnalysis style selection string to select the atoms in
             ref_pdb_file that corresponds to the static and mobile
-            monomer, respectively.
+            monomers, respectively.
 
         Returns
         -------
         CAPRI_class : pandas.Dataframe
-            Table of the docking poses with their respective
+            Table of the docking poses and their respective
             classifications.
         """
         raise NotImplementedError
@@ -344,17 +352,20 @@ class DR_SIP_Membrane(DR_SIP_Base):
     """
     DR-SIP's membrane protocol.
 
-    Protocol uses the C\ :sub:n symmetry, orientation, tilt angle and
-    distance restraints (optional) filters on ZDOCK results.
+    Protocol applies the C\ :sub:n symmetry, tilt angle and
+    distance restraints (optional) filters on docking poses.
+
+    Currently, only supports docking results from ZDOCK 3.0.2.
 
     Parameters
     ----------
     static_pdb, mobile_pdb : str
-        Full path to the static and mobile monomer PDB files.
+        Full path to the PDB files containing the static and mobile
+        monomers.
     zdock_output_file : str
-        Full path to the ZDOCK output file.
+        Full path to the ZDOCK 3.0.2 generated output file.
     dist_rest_file : str, optional
-        Full path to the distance restraints file, defaults to empty
+        Full path to the distance restraints file, defaults to an empty
         string.
 
         File is formatted such that each line corresponds to a distance
@@ -372,7 +383,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
             filter_data_col_names = ['DR Spearman Corr', 'DR Pearson Corr',
                                      'Order of Symmetry', 'Cn Symm RMSD', 'Tilt Angle', 'Filter Pass Status']
             filter_pass_status_col_names = ['DR Pass Status', 'Cn Symm Pass Status',
-                                            'Tilt Angle Pass Status', 'Orientation Pass Status', 'All Pass Status']
+                                            'Tilt Angle Pass Status', 'All Pass Status']
 
         else:
             filter_data_num_cols = 4
@@ -380,7 +391,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
             filter_data_col_names = [
                 'Order of Symmetry', 'Cn Symm RMSD', 'Tilt Angle', 'Filter Pass Status']
             filter_pass_status_col_names = [
-                'Cn Symm Pass Status', 'Tilt Angle Pass Status', 'Orientation Pass Status', 'All Pass Status']
+                'Cn Symm Pass Status', 'Tilt Angle Pass Status', 'All Pass Status']
 
         self.filter_data = pd.DataFrame(np.zeros((self.total_num_poses, filter_data_num_cols), dtype='float32'), index=range(
             1, self.total_num_poses + 1), columns=filter_data_col_names)
@@ -401,10 +412,10 @@ class DR_SIP_Membrane(DR_SIP_Base):
         Returns the final results table.
 
         Table contains the representative poses of each cluster ranked
-        based on the size of the clusters (in ascending order). For each
-        representative pose the Cluster ID, Order of Symmetry, Subunit
-        RMSD, Tilt Angle, Dist Rest Pearson Corr and Dist Rest Spearman
-        Corr are included in the table.
+        based on the size of the clusters (in descending order). For each
+        representative pose the Cluster ID, Order of Symmetry,
+        C\ :sub:n symmetry RMSD, Tilt Angle, Pearson and Spearman
+        correlations are included in the table.
 
         The representative pose of each cluster are chosen based on 2
         criteria:
@@ -416,9 +427,9 @@ class DR_SIP_Membrane(DR_SIP_Base):
         Parameters
         ----------
         clusters : list of int
-            List containing the cluster numbers of each pose.
+            List containing the cluster number that each pose is in.
         filtered_poses_data : pandas.Dataframe
-            Table containing the filter data and cluster assignment of
+            Table containing the filter data and cluster number of
             each pose.
 
         Returns
@@ -453,7 +464,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
 
         return final_table
 
-    def calc_CAPRI_class(self, ref_pdb_file, static_sel_str, mobile_sel_str):
+    def calc_CAPRI_class(self, ref_pdb_file, static_sel_str, mobile_sel_str, num_mers):
         """
         Classify each docking pose to one of four CAPRI classes.
 
@@ -461,14 +472,12 @@ class DR_SIP_Membrane(DR_SIP_Base):
         ref_pdb_file and assigned to one of the following classes:
         'Incorrect', 'Acceptable', 'Medium' or 'High'.
 
-        Uses the CAPRI criteria to classify the poses. See
-        :ref:`docking_eval.CAPRI_Criteria.calc_CAPRI_class`.
+        Uses the modified CAPRI criteria for HoTPs to classify the
+        poses. See :py:meth:`docking_eval.assign_Cn_symm_CAPRI_class <docking_eval.assign_Cn_symm_CAPRI_class>`.
 
-        Each monomer in a C\ :sub:n symmetric HoTP have 2 binding
-        interfaces, therefore there are 2 ways for the mobile monomer
-        to bind to the static monomer. Each pose is compared to the 2
-        possible binding interfaces. The interface with the higher %
-        native contacts was used to classify the docking pose.
+        The modified CAPRI criteria includes an additional criterion
+        where the predicted size ("n") of the pose must be equal the
+        size of the reference complex (num_mers).
 
         Parameters
         ----------
@@ -478,6 +487,8 @@ class DR_SIP_Membrane(DR_SIP_Base):
             MDAnalysis style selection string to select the atoms in
             ref_pdb_file that corresponds to the static and mobile
             monomer, respectively.
+        num_mers : int
+            The size of the original C\ :sub:n symmetric HoTP complex. 
 
         Returns
         -------
@@ -485,46 +496,40 @@ class DR_SIP_Membrane(DR_SIP_Base):
             Table of the docking poses with their respective
             classifications, % Native Contacts and iRMSD.
         """
+        
+        if not self.run_status:
+            self.run()
+
         universe = MDAnalysis.Universe(ref_pdb_file)
         self.zdock_traj_uni.trajectory[0]
 
         self.poses_CAPRI_class = docking_eval.assign_Cn_symm_CAPRI_class(
-            universe.atoms, static_sel_str, mobile_sel_str, self.zdock_traj_uni.atoms)
+            universe.atoms, static_sel_str, mobile_sel_str, self.zdock_traj_uni.atoms, num_mers, self.filter_data['Order of Symmetry'].values)
 
         return self.poses_CAPRI_class
 
-    def run(self, rmsd_cutoff=2.0, dist_rest_cutoff=0.3, tilt_angle_cutoff=0.52359877559, parallel=True, cluster_RMSD_cutoff=12.0, dssp_path='/opt/dssp/dssp', helical_elements_sel_str=[]):
+    def run(self, helical_elements_sel_str, Cn_rmsd_cutoff=2.0, dist_rest_cutoff=0.3, tilt_angle_cutoff=0.610865, cluster_RMSD_cutoff=12.0):
         """
         Executes the membrane protocol.
 
         Parameters
         ----------
-        rmsd_cutoff : float, optional
+        helical_elements_sel_str : lists of strings
+            Define which residues are the transmembrane helices. List
+            of strings. Each string should select for 1 transmembrane
+            helix. Uses MDAnalysis' selection commands.
+        Cn_rmsd_cutoff : float, optional
             The C\ :sub:`n` symmetry RMSD filter cutoff value (in
             Angstrom). Default is 2 Angstrom.
         dist_rest_cutoff : float, optional
             The distance restraints filter cutoff value (correlation).
             Default correlation 0.3.
         tilt_angle_cutoff : float, optional
-            The tilt angle filter cutoff value (radians). Defaults angle
-            0.52359877559 (30 degrees).
-        parallel : bool, optional
-            Sets the orientation filter to keep parallel (True) or
-            anti-parallel (False) poses. Defaults is True.
+            The tilt angle filter cutoff value (radians). Default
+            angle is 0.610865 rad (35 degrees).
         cluster_RMSD_cutoff : float, optional
-            Docking poses whose RMSD difference is < cluster_RMSD_cutoff
-            are in the same cluster. Default cutoff 12 Angstrom.
-        dssp_path : str, optional
-            Full file path to the DSSP program. Used for secondary
-            structure assignment and detecting the transmembrane
-            helices. If helical_elements_sel_str is set, DSSP will not
-            be used. Default path is '/opt/dssp/dssp'.
-        helical_elements_sel_str : lists of strings, optional
-            Set helical_elements_sel_str to define which residues are
-            the transmembrane helices. List of strings for selecting
-            residues of transmembrane helices. Each string should
-            select for 1 transmembrane helix. Uses MDAnalysis' selection
-            commands. Default is an empty list.
+            Cutoff used to cluster the docking poses. Default cutoff is
+            12 Angstrom.
         """
         # Get the selection, coordinates and COM of the static monomer
         self.static_CA_sel = self.zdock_obj.static_uni.select_atoms(
@@ -541,21 +546,15 @@ class DR_SIP_Membrane(DR_SIP_Base):
         if self.has_dist_rest_data:
             static_dist_rest_CA_coord = self.dist_res_static_sel.positions
             tmp_filter_status = np.zeros(
-                (self.total_num_poses, 5), dtype='bool')
+                (self.total_num_poses, 4), dtype='bool')
             tmp_filter_results = np.zeros(
                 (self.total_num_poses, 6), dtype='float32')
 
         else:
             tmp_filter_status = np.zeros(
-                (self.total_num_poses, 4), dtype='bool')
+                (self.total_num_poses, 3), dtype='bool')
             tmp_filter_results = np.zeros(
                 (self.total_num_poses, 4), dtype='float32')
-
-        # Run DSSP and call tilt_angle_criterion.determine_transmembrane_helices
-        # to determine the transmembrane helices
-        if len(helical_elements_sel_str) == 0:
-            helical_elements_sel_str = tilt_angle_criterion.determine_transmembrane_helices(
-                self.zdock_obj.static_uni.atoms, dssp_exec=dssp_path, min_res=15)[0]
 
         self.cylindrical_axis = tilt_angle_criterion.get_cylindrical_axis(
             self.static_CA_sel, helical_elements_sel_str)
@@ -568,11 +567,9 @@ class DR_SIP_Membrane(DR_SIP_Base):
             (self.total_num_poses, static_CA_coord.shape[0], 3), dtype='float32')
         poses_mobile_coords_idx = 0
 
-        self.zdock_traj_uni.trajectory[0]
-
         for pose_idx, ts in enumerate(self.zdock_traj_uni.trajectory):
 
-            # Distance restraints filter
+            # Distance Restraints (DR) filter:
             if self.has_dist_rest_data:
                 mobile_dist_rest_CA_coord = self.dist_res_mobile_sel.positions
                 current_distances, spearman_correl, pearson_correl, dist_rest_pass_status = dist_restraints_filter.dist_restraints_filter(
@@ -590,23 +587,17 @@ class DR_SIP_Membrane(DR_SIP_Base):
             mobile_CA_ori_coord = mobile_CA_coord - mobile_CA_com
             diff_vect = mobile_CA_com - static_CA_com
 
-            # Cn symmetry filter
+            # SIP filter:
+            # Cn symmetry criterion
             axis_of_rot, static_trans_vect, num_mers, RMSD, C_n_pass_status = Cn_symm_criterion.Cn_symm_criterion(
-                static_CA_ori_coord, mobile_CA_ori_coord, diff_vect, rmsd_cutoff)
+                static_CA_ori_coord, mobile_CA_ori_coord, diff_vect, Cn_rmsd_cutoff)
 
-            # Tilt angle filter
+            # Tilt angle criterion
             self.axis_of_rot[pose_idx] = axis_of_rot
             self.trans_vect[pose_idx] = static_trans_vect
 
             tilt_angle, tilt_angle_pass_status = tilt_angle_criterion.tilt_angle_criterion(
                 self.cylindrical_axis, axis_of_rot, cutoff=tilt_angle_cutoff)
-
-            # Orientation filter
-            mobile_orient_unit_vec = mobile_CA_coord[0] - mobile_CA_com
-            mobile_orient_unit_vec /= np.linalg.norm(mobile_orient_unit_vec)
-
-            orient_pass_status = orientation_criterion.orientation_criterion(
-                mobile_orient_unit_vec, self.static_orient_unit_vec, parallel=parallel)
 
             # Store filter results
             if self.has_dist_rest_data:
@@ -617,12 +608,10 @@ class DR_SIP_Membrane(DR_SIP_Base):
                 tmp_filter_results[pose_idx, 4] = np.degrees(tilt_angle)
                 tmp_filter_status[pose_idx, 2] = tilt_angle_pass_status
 
-                tmp_filter_status[pose_idx, 3] = orient_pass_status
-
-                tmp_filter_status[pose_idx, 4] = dist_rest_pass_status * \
-                    C_n_pass_status * tilt_angle_pass_status * orient_pass_status
+                tmp_filter_status[pose_idx, 3] = dist_rest_pass_status * \
+                    C_n_pass_status * tilt_angle_pass_status
                 tmp_filter_results[pose_idx,
-                                   5] = tmp_filter_status[pose_idx, 4]
+                                   5] = tmp_filter_status[pose_idx, 3]
 
                 if tmp_filter_status[pose_idx, 4]:
                     poses_mobile_coords[poses_mobile_coords_idx] = mobile_CA_coord
@@ -636,12 +625,10 @@ class DR_SIP_Membrane(DR_SIP_Base):
                 tmp_filter_results[pose_idx, 2] = np.degrees(tilt_angle)
                 tmp_filter_status[pose_idx, 1] = tilt_angle_pass_status
 
-                tmp_filter_status[pose_idx, 2] = orient_pass_status
-
-                tmp_filter_status[pose_idx, 3] = C_n_pass_status * \
-                    tilt_angle_pass_status * orient_pass_status
+                tmp_filter_status[pose_idx, 2] = C_n_pass_status * \
+                    tilt_angle_pass_status
                 tmp_filter_results[pose_idx,
-                                   3] = tmp_filter_status[pose_idx, 3]
+                                   3] = tmp_filter_status[pose_idx, 2]
 
                 if tmp_filter_status[pose_idx, 3]:
                     poses_mobile_coords[poses_mobile_coords_idx] = mobile_CA_coord
@@ -660,13 +647,15 @@ class DR_SIP_Membrane(DR_SIP_Base):
             filtered_poses_dist_mat, cutoff=cluster_RMSD_cutoff)
         self.filtered_poses_data['Cluster ID'] = clusters
 
-        # Select cluster representatives, rank the clusters and return
-        # the final results table
+        # Select cluster representatives, then rank the clusters and
+        # return the final results table
         self.final_results = self.get_final_results_table(
             clusters, self.filtered_poses_data)
 
+        self.run_status = True
+
     def save_data(self, filename):
-        """Save current session to file.
+        """Save current session/instance to file.
 
         Parameters
         ----------
@@ -710,17 +699,17 @@ class DR_SIP_Membrane(DR_SIP_Base):
                 umsgpack.packb(temp_storage_dict), 9))
 
     def write_pose(self, pose_num, filename):
-        """
-        Write a pose to a PDB file.
+        """Write a C\ :sub:n symmetric complex to a PDB file.
+
+        Given the original rank of a ZDOCK pose, write out the closest
+        ideal C\ :sub:n symmetric complex to a PDB file.
 
         Parameters
         ----------
         pose_num : int
-            Pose number to be written out. Using ZDOCK's original
-            ranking as the pose number.
+            The pose's original ZDOCK rank.
         filename : str
-            Full path to the filename to store the docking pose in PDB
-            format.
+            Filename to store the complex in PDB format.
         """
         pose_idx = pose_num - 1
         order_of_symm = np.int32(
@@ -751,18 +740,19 @@ class DR_SIP_Membrane(DR_SIP_Base):
 
         complex_uni.atoms.write(filename)
 
-    def write_topN_poses(self, folder, num_poses=10):
-        """
-        Write the top N docking poses to PDB.
+    def write_topN_poses(self, folder, num_poses=20):
+        """Write the top-N C\ :sub:n symmetric complexes to PDB files.
+
+        The top-N complexes are from the DR-SIP final results table.
 
         Parameters
         ----------
         folder : str
-            Folder to write the PDB files of the top N docking poses
-            ranked by DR-SIP. Files are written out as Pose_1.pdb,
-            Pose_2.pdb, ..., Pose_N.pdb.
+            Folder to write the PDB files of the top-N complexes
+            Files are written out as Pose_1.pdb, Pose_2.pdb, ...,
+            Pose_N.pdb.
         num_poses : int, optional
-            The number of top poses to write out. Default: 10
+            The number of top-N poses to write out. Default: 20
         """
         if 'final_results' not in self.__dict__:
             self.run()
@@ -781,14 +771,17 @@ class DR_SIP_Soluble(DR_SIP_Base):
     """
     DR-SIP's soluble protocol.
 
-    Protocol uses the distance restraints filters on ZDOCK results.
+    Protocol applies the distance restraints filter on docking poses.
+
+    Currently, only supports docking results from ZDOCK 3.0.2.
 
     Parameters
     ----------
     static_pdb, mobile_pdb : str
-        Full path to the static and mobile monomer PDB files.
+        Full path to the PDB files containing the static and mobile
+        monomers.
     zdock_output_file : str
-        Full path to the ZDOCK output file.
+        Full path to the ZDOCK 3.0.2 generated output file.
     dist_rest_file : str
         Full path to the distance restraints file.
 
@@ -796,7 +789,6 @@ class DR_SIP_Soluble(DR_SIP_Base):
         restraint (tab delimited)::
 
             chain_1 resid_1 chain_2 resid_2 distance
-
     """
     def __init__(self, static_pdb, mobile_pdb, zdock_output_file, dist_rest_file):
         super(DR_SIP_Soluble, self).__init__(static_pdb,
@@ -820,8 +812,8 @@ class DR_SIP_Soluble(DR_SIP_Base):
             The distance restraints filter cutoff value (correlation).
             Default correlation 0.3.
         cluster_RMSD_cutoff : float, optional
-            Docking poses whose RMSD difference is < cluster_RMSD_cutoff
-            are in the same cluster. Default cutoff 12 Angstrom.
+            Cutoff used to cluster the docking poses. Default cutoff is
+            12 Angstrom.
         """
 
         # Get the selection, coordinates and COM of the static monomer
@@ -851,7 +843,7 @@ class DR_SIP_Soluble(DR_SIP_Base):
                 'float64')
             mobile_dist_rest_CA_coord = self.dist_res_mobile_sel.positions
 
-            # Distance restraints filter
+            # Distance Restraints (DR) filter:
             current_distances, spearman_correl, pearson_correl, dist_rest_pass_status = dist_restraints_filter.dist_restraints_filter(
                 static_dist_rest_CA_coord, mobile_dist_rest_CA_coord, self.dist_mat_idx, self.dist_rest, cutoff=dist_rest_cutoff)
 
@@ -889,22 +881,21 @@ class DR_SIP_Soluble(DR_SIP_Base):
         Returns the final results table.
 
         Table contains the representative poses of each cluster ranked
-        based on the size of the clusters (in ascending order). For each
-        representative pose the Cluster ID, Order of Symmetry, Subunit
-        RMSD, Tilt Angle, Dist Rest Pearson Corr and Dist Rest Spearman
-        Corr are included in the table.
+        based on the size of the clusters (in descending order). For each
+        representative pose the Cluster ID, the Pearson and Spearman
+        correlations are included in the table.
 
         The representative pose of each cluster has the highest Spearman
         correlation. If there are more than one pose with the same
-        correlation, the one with the highest Pearson correlation was
-        chosen.
+        highest correlation, the one with the highest Pearson
+        correlation is chosen.
 
         Parameters
         ----------
         clusters : list of int
-            List containing the cluster numbers of each pose.
+            List containing the cluster number that each pose is in.
         filtered_poses_data : pandas.Dataframe
-            Table containing the filter data and cluster assignment of
+            Table containing the filter data and cluster number of
             each pose.
 
         Returns
@@ -948,7 +939,7 @@ class DR_SIP_Soluble(DR_SIP_Base):
         'Incorrect', 'Acceptable', 'Medium' or 'High'.
 
         Uses the CAPRI criteria to classify the poses. See
-        :ref:`docking_eval.CAPRI_Criteria.calc_CAPRI_class`.
+        :py:meth:`docking_eval.assign_soluble_CAPRI_class <docking_eval.assign_soluble_CAPRI_class>`.
 
         Parameters
         ----------
@@ -1024,26 +1015,24 @@ class DR_SIP_Soluble(DR_SIP_Base):
         Parameters
         ----------
         pose_num : int
-            Pose number to be written out. Using ZDOCK's original
-            ranking as the pose number.
+            The pose's original ZDOCK rank.
         filename : str
-            Full path to the filename to store the docking pose in PDB
-            format.
+            Filename of PDB file to store the docking pose.
         """
         self.zdock_obj.write_pose(pose_num, filename, mobile_only=False)
 
-    def write_topN_poses(self, folder, num_poses=10):
+    def write_topN_poses(self, folder, num_poses=20):
         """
-        Write the top N docking poses to PDB.
+        Write the top-N docking poses to PDB.
 
         Parameters
         ----------
         folder : str
-            Folder to write the PDB files of the top N docking poses
+            Folder to write the PDB files of the top-N docking poses
             ranked by DR-SIP. Files are written out as Pose_1.pdb,
             Pose_2.pdb, ..., Pose_N.pdb.
         num_poses : int, optional
-            The number of top poses to write out. Default: 10
+            The number of top poses to write out. Default: 20
         """
         if 'final_results' not in self.__dict__:
             self.run()

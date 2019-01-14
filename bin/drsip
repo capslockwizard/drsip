@@ -25,15 +25,10 @@ def drsip_membrane(args):
                              args.zdock_output_file,
                              args.dist_rest_file)
 
-    if len(args.trans_helix) > 0:
-        helical_elements_sel_str = ['resid %s' %
-                                    x.strip() for x in args.trans_helix.split()]
+    helical_elements_sel_str = ['resid %s' %
+                                x.strip() for x in args.trans_helix.split()]
 
-    else:
-        helical_elements_sel_str = ''
-
-    drsip_obj.run(dssp_path=args.dssp_path,
-                  helical_elements_sel_str=helical_elements_sel_str)
+    drsip_obj.run(helical_elements_sel_str=helical_elements_sel_str)
 
     final_results(args, drsip_obj)
 
@@ -63,11 +58,11 @@ if __name__ == '__main__':
     soluble_subparser.add_argument(
         'dist_rest_file', help='Distance restraints file')
     soluble_subparser.add_argument('-o', dest='output_file',
-                                   help='Output the top N results file. Default: \'DRSIP_results.xlsx\'. See -N', required=False, default='DRSIP_results.xlsx')
+                                   help='Output the top N results file. Default: \'DRSIP_results.csv\'. See -N', required=False, default='DRSIP_results.csv')
     soluble_subparser.add_argument('-p', dest='poses_folder',
                                    help='Folder to write the top N poses. Default: Current folder. See -N', required=False, default='')
     soluble_subparser.add_argument('-N', dest='num_poses',
-                                   help='Set "N", the number of top poses to write out. Default: 10', required=False, type=int, default=10)
+                                   help='Set "N", the number of top poses to write out. Default: 20', required=False, type=int, default=20)
     soluble_subparser.add_argument('--save-all', dest='save_file', help='For advanced users only. Saves all the input files and filtering data to a compressed msgpack file. Optional.',
                                    required=False, default='')
     soluble_subparser.set_defaults(func=drsip_soluble)
@@ -78,26 +73,21 @@ if __name__ == '__main__':
         'static_pdb', help='Static monomer PDB file')
     membrane_subparser.add_argument(
         'mobile_pdb', help='Mobile monomer PDB file')
+    membrane_subparser.add_argument('trans-helix', help='Comma separated resids of transmembrane helices.\
+    Ex. Helix 1: resid 5-20 , Helix 2: resid 23-40, Helix 3: resid 45-60 then TRANS-HELIX:"5-20, 23-40, 45-60". These can be obtained from the Orientations of Proteins in Membranes (OPM) database or PPM server')
     membrane_subparser.add_argument('zdock_output_file',
                                     help='ZDOCK 3.0.2\'s output file')
     membrane_subparser.add_argument('-d', dest='dist_rest_file',
                                     help='Distance restraints file', required=False, default='')
     membrane_subparser.add_argument('-o', dest='output_file',
-                                    help='Output the top N results file. Default: \'DRSIP_results.xlsx\'. See -N', required=False, default='DRSIP_results.xlsx')
+                                    help='Output the top N results file. Default: \'DRSIP_results.csv\'. See -N', required=False, default='DRSIP_results.csv')
     membrane_subparser.add_argument('-p', dest='poses_folder',
                                     help='Folder to write the top N poses. Default: Current folder. See -N', required=False, default='')
     membrane_subparser.add_argument('-N', dest='num_poses',
-                                    help='Set "N", the number of top poses to write out. Default: 10', required=False, type=int, default=10)
+                                    help='Set "N", the number of top poses to write out. Default: 20', required=False, type=int, default=20)
     membrane_subparser.add_argument('--save-all', dest='save_file', help='For advanced users only. Saves all the input files and filtering data to a compressed msgpack file. Optional.',
                                     required=False, default='')
 
-    membrane_arg_grp = membrane_subparser.add_argument_group(
-        'required, provide one or the other but not both')
-    group = membrane_arg_grp.add_mutually_exclusive_group(required=True)
-    group.add_argument('--dssp', dest='dssp_path',
-                       help='Path to the DSSP program', default='')
-    group.add_argument('--trans-helix', dest='trans_helix', help='Comma separated resids of transmembrane helices.\
-    Ex. Helix 1: resid 5-20 , Helix 2: resid 23-40, Helix 3: resid 45-60 then TRANS-HELIX:"5-20, 23-40, 45-60". These can be obtained from the Orientations of Proteins in Membranes (OPM) database or PPM server', default='')
     membrane_subparser.set_defaults(func=drsip_membrane)
 
     args = parser.parse_args()

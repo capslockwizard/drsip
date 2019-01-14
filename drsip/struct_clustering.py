@@ -27,21 +27,22 @@ import drsip_common
 
 
 def min_dist(dist_mat_1, dist_mat_2):
-    """Compare the 2 matrices and keep the minimum values.
+    """Compare the elements of 2 matrices and keep the minimum values.
 
     Values are compared element-wise and the minimum of the 2 values is
-    stored and returned.
+    returned.
 
     Parameters
     ----------
     dist_mat_1, dist_mat_2 : np.array
         NxN distance matrices between the 2 monomers in the docking
-        pose.
+        pose. Where N are the number of atoms.
 
     Returns
     -------
     np.array
-        Returns the distance matrix containing the minimum values.
+        Returns a new distance matrix containing the minimum values for
+        each element.
     """
     temp_dist_mat = dist_mat_1.copy()
     swap_idx = np.where(dist_mat_1 > dist_mat_2)
@@ -54,15 +55,15 @@ def min_dist(dist_mat_1, dist_mat_2):
 def calc_MSD(ref_coord, mobile_coords):
     """Compute the mean squared deviation (MSD).
 
-    MSDs are computed between the reference monomer and the mobile
-    monomers from the different poses.
+    MSDs are computed between the reference and the mobile monomers
+    from different poses.
 
     Parameters
     ----------
     ref_coord : np.array
         Nx3 coordinate matrix of the reference monomer with N atoms.
     mobile_coords : np.array
-        MxNx3 coordinate matrices of the mobile monomers with N atoms
+        MxNx3 coordinate matrices of mobile monomers with N atoms
         from M poses.
 
     Returns
@@ -105,14 +106,22 @@ def calc_MSD_mob_static(rotated_static_coords, mobile_coords):
     num_poses = rotated_static_coords.shape[0]
     MSDs = np.zeros((num_poses, num_poses), dtype=np.float32)
 
+    # Compute the first and last rows of the MSD
     MSDs[0, 1:] = calc_MSD(rotated_static_coords[0], mobile_coords[1:])
     MSDs[num_poses-1, 0:num_poses -
          1] = calc_MSD(rotated_static_coords[num_poses-1],
                        mobile_coords[:num_poses-1])
 
+    # For the other rows:
     for row_idx in xrange(1, num_poses-1):
+        # To avoid comparing the same pose (diagonal), split the
+        # calculation into two parts:
+
+        # Lower half of the MSD
         MSDs[row_idx, 0:row_idx] = calc_MSD(
             rotated_static_coords[row_idx], mobile_coords[:row_idx])
+
+        # Upper half of the MSDs
         MSDs[row_idx, row_idx +
              1:] = calc_MSD(rotated_static_coords[row_idx], mobile_coords[row_idx+1:])
 
@@ -120,31 +129,38 @@ def calc_MSD_mob_static(rotated_static_coords, mobile_coords):
 
 
 def cluster_poses(dist_mat, cutoff=12.0, criterion='distance'):
-    """Cluster poses
+    """Cluster docking poses
 
-    Poses are clustered using hierarchical clustering with the average
-    linkage criteria with the distance matrix. The distance matrix is
-    the RMSD between the poses.
+    Docking poses are clustered with hierarchical clustering and
+    average linkage criteria. The distance matrix contains the RMSD
+    between the poses. See
+    :py:meth:`cal_rmsd_between_poses_membrane <drsip.struct_clustering.cal_rmsd_between_poses_membrane>` for HoTPs
+    or :py:meth:`cal_rmsd_between_poses_soluble <drsip.struct_clustering.cal_rmsd_between_poses_soluble>` for
+    soluble proteins.
 
-    Clustering is implemented by `SciPy <https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.cluster.hierarchy.fcluster.html#scipy.cluster.hierarchy.fcluster>`_.
+    Clustering is implemented by `SciPy <https://docs.scipy.org/doc/scipy-0.14.0/reference/cluster.hierarchy.html>`_.
 
     Parameters
     ----------
     dist_mat : np.array
         MxM distance matrix containing the RMSD between all pairs of
-        poses.
+        poses. Where M is the number of poses.
     cutoff : float, optional
         The cutoff used to determine when to stop combining clusters.
         This happens when the shortest distance between all pairs of
         clusters is >cutoff. Default cutoff is 12.0 Angstroms.
     criterion : str, optional
-        See `SciPy documentation <https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.cluster.hierarchy.fcluster.html#scipy.cluster.hierarchy.fcluster>`_ for details.
-        Default criterion is 'distance'.
+        Default criterion is 'distance' which uses the cophenetic
+        distance to compute distances between members from different
+        clusters. The cophenetic distance is the distance between the 2
+        clusters. See `SciPy documentation <https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.cluster.hierarchy.fcluster.html#scipy.cluster.hierarchy.fcluster>`_ for details.
 
     Returns
     -------
     np.array
-        MxM matrix containing the RMSDs between the poses.
+        Returns an array of length M where each element in the array
+        corresponds to cluster number that the m'th pose has been
+        assigned to.
     """
     average_tree = sp.cluster.hierarchy.average(
         sp.spatial.distance.squareform(dist_mat))
@@ -156,34 +172,57 @@ def calc_rot_static_coord(static_coord, mobile_com, static_com, rot_mat):
     """Compute coordinate of the static monomer after superimposition.
 
     After the mobile monomer is superimposed onto one of the monomers
-    from the other pose, the coordinate of the static monomer moves
-    with the mobile monomer. This function computes the coordinates of
-    this static monomer.
+    from the other pose, the static monomer moves with the mobile
+    monomer. This function computes the coordinates of this static
+    monomer.
 
     Parameters
     ----------
     static_coord : np.array
         Nx3 coordinate matrix of the static monomer with N atoms.
     mobile_com : np.array
-        3-dim vector pointing from the origin to the mobile monomer's
-        center of mass (COM). The original COM of the mobile monomer.
+        Vector pointing from the origin to the mobile monomer's center
+        of mass (COM). COM of the mobile monomer in the pose before
+        superimposition.
     static_com : np.array
-        3-dim vector pointing from the origin to the static monomer's
-        center of mass (COM). The original COM of the static monomer.
+        Vector pointing from the origin to the static monomer's center
+        of mass (COM). COM of the static monomer in the pose before
+        superimposition.
     rot_mat : np.array
-        3x3 rotation matrix to rotate the static monomer to the mobile
-        monomer when both the COMs are at the origin.
+        3x3 rotation matrix used to superimpose the mobile monomer to
+        the monomer on the other pose.
 
     Returns
     -------
     np.array
-        MxM matrix containing the RMSDs between the poses.
+        Nx3 coordinate matrix of the static monomer after superimposition
+        of the mobile monomer.
     """
     return (static_coord - mobile_com).dot(rot_mat.T) + static_com
 
 
 def cal_rmsd_between_poses_membrane(static_coord, mobile_coords):
-    """Compute the RMSD between poses of HoTPs.
+    """Compute the RMSD/distance between the docking poses of HoTPs.
+
+    Each pose contains 2 monomers, the static monomer whose coordinates
+    are fixed and the mobile monomer that is translated and rotated
+    during docking.
+    
+    There are 4 ways to compute the RMSD between any 2 monomers, each
+    chosen from one of the 2 poses:
+    1. Static monomers from both poses are superimposed and RMSD is
+    computed for the mobile monomers. No superimposition is required
+    for ZDOCK generated poses since the static monomers are fixed.
+    2. Mobile monomers from both poses are superimposed and RMSD is
+    computed for the static monomers.
+    3. A mobile monomer from one pose is superimposed onto the static
+    monomer in the second pose. The RMSD of monomers that were not
+    superimposed are computed.
+    4. The monomers used to compute the RMSD in (3) is superimposed and
+    while the other two monomers are used to compute the RMSD.
+
+    This function computes all 4 RMSDs and picks the smallest RMSD to
+    represent the distance between these 2 poses.
 
     Parameters
     ----------

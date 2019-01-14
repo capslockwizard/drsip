@@ -1,3 +1,19 @@
+"""
+=====================================================
+Saving and Loading (:mod:`drsip.save_load`)
+=====================================================
+
+Module contains helper functions to save and load DR-SIP data files.
+
+Functions
+---------
+
+.. autofunction:: save_pd_table
+.. autofunction:: load_pd_table
+.. autofunction:: load_StrIO
+.. autofunction:: convert_StrIO_or_file_to_str
+"""
+
 import umsgpack
 import zlib
 import pandas as pd
@@ -5,7 +21,20 @@ import drsip_common
 
 
 def save_pd_table(storage, table, var_name):
-    """Split and store the values and indices independently"""
+    """Split and store the values and indices 
+    
+    Parameters
+    ----------
+    dist_mat_1, dist_mat_2 : np.array
+        NxN distance matrices between the 2 monomers in the docking
+        pose. Where N are the number of atoms.
+
+    Returns
+    -------
+    np.array
+        Returns a new distance matrix containing the minimum values for
+        each element.
+    """
 
     storage[var_name + '_val'] = table.values.tolist()
     storage[var_name + '_idx'] = table.index.tolist()

@@ -23,31 +23,31 @@ def Cn_symm_criterion(static_ori_coord, mobile_ori_coord, diff_vect, cutoff=2.0)
     """
     C\ :sub:`n` symmetry criterion.
 
-    Checks if the current docking pose is close to its ideal C\ :sub:`n`
-    symmetric complex.
+    Checks if the current docking pose is close to its closest ideal C\ :sub:`n`
+    symmetric pose.
 
     Parameters
     ----------
     static_ori_coord, mobile_ori_coord : np.array
-        Nx3 coordinate array of the static monomer and mobile monomer,
+        Nx3 coordinate array of the static and mobile monomers,
         respectively, from the docking pose. Where N is the number of
         atoms.
     diff_vect : np.array
-        1-dim array with 3 elements of the vector from the COM of the
-        static monomer to the COM of the mobile monomer.
+        Vector from the center of mass (COM) of the static monomer to
+        the COM of the mobile monomer.
     cutoff : float, optional
         The C\ :sub:n symmetric RMSD cutoff. If the docking pose's
-        C\ :sub:n symmetric RMSD > cuttoff, it is filtered out. Default
-        cutoff: 2.0 Angstrom.
+        C\ :sub:n symmetric RMSD > cuttoff, it fails the criterion.
+        Default cutoff is 2.0 Angstrom.
 
     Returns
     -------
     list
-        Returns the axis of rotation (np.array), static translation
-        vector (np.array), number of oligomers (int), C\ :sub:n
+        Returns the axis of rotation (np.array), static monomer's
+        translation vector (np.array), number of oligomers (int), C\ :sub:n
         symmetric RMSD (float) and RMSD_pass_status (bool). The
         RMSD_pass_status is True when the docking pose passes the
-        criterion and vice versa.
+        criterion, otherwise False.
     """
     rot_mat = drsip_common.get_best_fit_rot_mat(
         static_ori_coord, mobile_ori_coord)
@@ -89,20 +89,23 @@ def Cn_symm_RMSD(pred_mobile_coord, mobile_ori_coord, static_trans_vect, diff_ve
     Parameters
     ----------
     pred_mobile_coord : np.array
-        Nx3 coordinate array of the ideal C\ :sub:n mobile monomer.
-        Where N is the number of atoms.
+        Nx3 coordinate array of the ideal C\ :sub:n symmetric mobile
+        monomer. Where N is the number of atoms.
     mobile_ori_coord : np.array
         Nx3 coordinate array of the mobile monomer from the docking
         pose. Where N is the number of atoms.
     static_trans_vect : np.array
-    rot_mat : np.array
-        3x3 rotation matrix.
+        The vector pointing from the center of mass (COM) of the
+        complex to the COM of the static monomer. The COM of the
+        complex is set at the origin.
+    diff_vect : np.array
+        Vector from the center of mass (COM) of the static monomer to
+        the COM of the mobile monomer.
 
     Returns
     -------
     np.array
-        1-dim array with 3 elements containing the axis of rotation
-        vector.
+        Returns the axis of rotation.
     """
     return np.sqrt(np.sum((pred_mobile_coord - mobile_ori_coord -
                    static_trans_vect - diff_vect)**2) /
@@ -121,8 +124,7 @@ def get_axis_of_rot(rot_mat):
     Returns
     -------
     np.array
-        1-dim array with 3 elements containing the axis of rotation
-        vector.
+        Returns the axis of rotation.
     """
     rot_mat_eigval, rot_mat_eigvect = np.linalg.eig(rot_mat)
     eigenvec_idx = np.argmin(np.abs(np.real(rot_mat_eigval) - 1))
@@ -139,8 +141,8 @@ def get_angle_of_rotation(rot_mat, axis_of_rot):
     rot_mat : np.array
         3x3 rotation matrix.
     axis_of_rot : np.array
-        1-dim array with 3 elements containing the axis of rotation
-        vector.
+        Axis of rotation extracted from the rotation matrix. See
+        :py:meth:`get_axis_of_rot <drsip.Cn_symm_criterion.get_axis_of_rot>`.
 
     Returns
     -------
@@ -160,18 +162,18 @@ def get_num_mers(rot_angle):
     """
     Predict the size of the complex from the rotation angle.
 
-    The size is defined as the number of monomers in the C\ :sub:n
-    symmetric complex.
+    The size ("n") is the number of monomers in the C\ :sub:n symmetric
+    complex.
 
     Parameters
     ----------
     rot_angle : float
-        Rotation angle in radians.
+        Rotation angle in radians. See :py:meth:`get_angle_of_rotation <drsip.Cn_symm_criterion.get_angle_of_rotation>`.
 
     Returns
     -------
     int
-        Number of monomers.
+        Number of monomers ("n").
     """
     return np.abs(np.rint((np.pi * 2) / rot_angle))
 
@@ -180,19 +182,19 @@ def get_trans_vect(axis_of_rot, rot_angle, diff_vect):
     """
     Returns the translation vector.
 
-    The translation vector is the vector from the complex's COM to the
-    COM of the static monomer.
+    The translation vector is the vector from the complex's center of
+    mass (COM) to the COM of the static monomer. The COM of the complex
+    is set to the origin.
 
     Parameters
     ----------
     axis_of_rot : np.array
-        1-dim array with 3 elements containing the axis of rotation
-        vector.
+        Axis of rotation. See :py:meth:`get_axis_of_rot <drsip.Cn_symm_criterion.get_axis_of_rot>`.
     rot_angle : float
-        Rotation angle in radians.
+        Rotation angle in radians. See :py:meth:`get_angle_of_rotation <drsip.Cn_symm_criterion.get_angle_of_rotation>`.
     diff_vect : np.array
-        1-dim array with 3 elements of the vector from the COM of the
-        static monomer to the COM of the mobile monomer.
+        Vector from the center of mass (COM) of the static monomer to
+        the COM of the mobile monomer.
 
     Returns
     -------
@@ -215,16 +217,15 @@ def get_trans_vect(axis_of_rot, rot_angle, diff_vect):
 
 def get_rot_mat_arbitrary_axis(rot_angle, axis_of_rot):
     """
-    Returns the rotation matrix for the given angle and axis of
-    rotation.
+    Returns the rotation matrix for the rotation by the given rotation
+    angle about the axis of rotation.
 
     Parameters
     ----------
     rot_angle : float
         Rotation angle in radians.
     axis_of_rot : np.array
-        1-dim array with 3 elements containing the axis of rotation
-        vector.
+        Axis of rotation.
 
     Returns
     -------
