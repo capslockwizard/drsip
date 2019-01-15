@@ -110,9 +110,10 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
-# Ignore test folder
+# Ignore test/example folders
 test/
 bak/
+examples/
 
 # Ignore vscode folder
 .vscode/

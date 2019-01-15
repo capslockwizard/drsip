@@ -22,6 +22,7 @@ If you're using any of our packages please :ref:`cite us <cite-us>`.
    :caption: Contents:
 
    quickstart
+   example
    cite
    api
 

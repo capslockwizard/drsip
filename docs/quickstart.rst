@@ -39,17 +39,7 @@ The distance restraints file is optional, the filter will not be applied if ther
 
 NOTE: The columns are separated by tabs (tab-delimited).
 
-Example::
-
-    drsip membrane 2oar-static_marked.pdb 2oar_mobile_marked.pdb "17-46, 69-93" MscL_54000_ZDOCK.out -d MscL_FRET_Data.txt -o MscL/DRSIP_results.csv -p MscL/
-
-MscL_FRET_Data.txt contains ::
-
-    A	40	B	40	5.033146272
-    B	25	A	25	4.528073406
-    ...
-
-For more details run "drsip membrane -h".
+See an example :ref:`here <example-HoTP>`.
 
 Soluble Protein Protocol
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -59,8 +49,4 @@ Soluble Protein Protocol
 
 Similar to running the membrane protein docking protocol except that the distance restraints file is required and there is no trans-helix argument.
 
-Example::
-
-    drsip soluble 5ccg_SNARE_marked.pdb 2r83_aligned_domains_marked.pdb Syt1-SNARE_ZDOCK_54000.out Syt1-SNARE_FRET_Data.txt -o Syt1_SNARE/DRSIP_soluble_results.csv -p Syt1_SNARE/
-
-For more details run "drsip soluble -h".
+See an example :ref:`here <example-soluble>`.
