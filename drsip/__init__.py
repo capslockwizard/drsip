@@ -41,6 +41,7 @@ import dist_restraints_filter
 import struct_clustering
 import tilt_angle_criterion
 import save_load
+import drsip_common as common
 
 
 def load_data(filename):
@@ -713,6 +714,8 @@ class DR_SIP_Membrane(DR_SIP_Base):
         if not self.run_status:
             self.run()
 
+        common.makedir(filename)
+
         self.final_results.to_csv(filename)
 
     def save_data(self, filename):
@@ -755,6 +758,8 @@ class DR_SIP_Membrane(DR_SIP_Base):
         if hasattr(self, 'poses_CAPRI_class'):
             save_load.save_pd_table(
                 temp_storage_dict, self.poses_CAPRI_class, 'poses_CAPRI_class')
+
+        common.makedir(filename)
 
         with open(filename, 'wb') as output_file:
             output_file.write(zlib.compress(
@@ -799,6 +804,8 @@ class DR_SIP_Membrane(DR_SIP_Base):
                 num_atoms * prev_subunit_id + 1, num_atoms * current_subunit_id))
             current_select.positions = current_pos
             current_select.segments.segids = string.uppercase[prev_subunit_id]
+
+        common.makedir(filename)
 
         complex_uni.atoms.write(filename)
 
@@ -952,6 +959,8 @@ class DR_SIP_Soluble(DR_SIP_Base):
         if not self.run_status:
             self.run()
 
+        common.makedir(filename)
+
         self.final_results.to_csv(filename)
 
     def build_final_results_table(self, clusters, filtered_poses_data):
@@ -1080,6 +1089,8 @@ class DR_SIP_Soluble(DR_SIP_Base):
         if hasattr(self, 'poses_CAPRI_class'):
             save_load.save_pd_table(
                 temp_storage_dict, self.poses_CAPRI_class, 'poses_CAPRI_class')
+
+        common.makedir(filename)
 
         with open(filename, 'wb') as output_file:
             output_file.write(zlib.compress(
