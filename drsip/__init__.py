@@ -560,7 +560,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
 
         self.CAPRI_assign_status = True
 
-    def run(self, Cn_rmsd_cutoff=2.0, dist_rest_cutoff=0.3, tilt_angle_cutoff=0.610865, cluster_RMSD_cutoff=12.0):
+    def run(self, Cn_rmsd_cutoff=2.0, dist_rest_cutoff=0.3, tilt_angle_cutoff=0.541052, cluster_RMSD_cutoff=12.0):
         """
         Executes the membrane protocol.
 
@@ -574,7 +574,7 @@ class DR_SIP_Membrane(DR_SIP_Base):
             Default correlation 0.3.
         tilt_angle_cutoff : float, optional
             The tilt angle filter cutoff value (radians). Default
-            angle is 0.610865 rad (35 degrees).
+            angle is 0.541052 rad (31 degrees).
         cluster_RMSD_cutoff : float, optional
             Cutoff used to cluster the docking poses. Default cutoff is
             12 Angstrom.

@@ -14,7 +14,7 @@ Functions
 import numpy as np
 
 
-def tilt_angle_criterion(cylindrical_axis, membrane_norm, cutoff=0.610865):
+def tilt_angle_criterion(cylindrical_axis, membrane_norm, cutoff=0.541052):
     """Tilt angle criterion
 
     The tilt angle of a monomer is the acute angle between its
@@ -29,8 +29,8 @@ def tilt_angle_criterion(cylindrical_axis, membrane_norm, cutoff=0.610865):
         normal. The membrane normal is the axis orthogonal to the
         membrane bilayer.
     cutoff : float, optional
-        Tilt angle cutoff in radians. Default cutoff is 0.610865 rad
-        (35 degrees).
+        Tilt angle cutoff in radians. Default cutoff is 0.541052 rad
+        (31 degrees).
 
     Returns
     -------
