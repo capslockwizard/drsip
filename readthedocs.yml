@@ -1,0 +1,7 @@
+python:
+   version: 2.7
+   install:
+      - requirements: requires.txt
+      - method: pip
+        path: .
+   system_packages: true
