@@ -1,6 +1,7 @@
 zdock-parser
 numba
-numpy >= 1.16
+numpy
+Cython == 0.16
 scipy
 pandas
 u-msgpack-python
