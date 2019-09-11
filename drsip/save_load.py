@@ -14,15 +14,13 @@ Functions
 .. autofunction:: convert_StrIO_or_file_to_str
 """
 
-import umsgpack
-import zlib
 import pandas as pd
 import drsip_common
 
 
 def save_pd_table(storage, table, var_name):
-    """Split and store the values and indices 
-    
+    """Split and store the values and indices
+
     Parameters
     ----------
     dist_mat_1, dist_mat_2 : np.array
@@ -52,7 +50,8 @@ def load_pd_table(storage, var_name, pop=False):
     Args:
         storage (dict): Dictionary to load the data from
         var_name (str): Original variable name
-        pop (bool, optional): If True, remove key-value pairs used to reconstruct the table from storage
+        pop (bool, optional): If True, remove key-value pairs used to
+            reconstruct the table from storage
     """
 
     if pop:
@@ -75,7 +74,8 @@ def load_pd_table(storage, var_name, pop=False):
 
 
 def load_StrIO(storage, var_name):
-    """Convert strings in storage to StringIO and replace original string in storage
+    """Convert strings in storage to StringIO and replace original string in
+       storage
 
     Args:
         storage (dict): Dictionary to load and save the string/StringIO data
@@ -89,7 +89,7 @@ def load_StrIO(storage, var_name):
 
 def convert_StrIO_or_file_to_str(input_obj):
 
-    if isinstance(input_obj, str):
+    if isinstance(input_obj, basestring):
         input_str = drsip_common.convert_file_to_str(input_obj)
 
     else:

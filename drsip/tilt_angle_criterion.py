@@ -39,7 +39,18 @@ def tilt_angle_criterion(cylindrical_axis, membrane_norm, cutoff=0.610865):
         status is True if the monomer passes the filter, otherwise
         False.
     """
-    current_angle = np.arccos(cylindrical_axis.dot(membrane_norm))
+
+    b, a = np.sort([np.linalg.norm(cylindrical_axis), np.linalg.norm(membrane_norm)])
+    c = np.linalg.norm(membrane_norm - cylindrical_axis)
+
+    if b >= c:
+        mu = c - (a-b)
+
+    else:
+        mu = b - (a-c)
+
+    current_angle = 2 * \
+        np.arctan(np.sqrt(((a-b)+c) * mu / ((a+(b+c)) * ((a-c)+b))))
 
     if current_angle > np.pi/2:
         current_angle = np.pi - current_angle
@@ -83,6 +94,10 @@ def get_cylindrical_axis(CA_sel, transmembrane_helix_sel_strs):
         for transmembrane_helix_sel_str in transmembrane_helix_sel_strs:
             helix_sel = transmembrane_helix_sel.select_atoms(
                 transmembrane_helix_sel_str)
+
+            if helix_sel.n_atoms < 3:
+                continue
+
             diff = helix_sel.positions - helix_sel.positions.mean(axis=0)
 
             # We do not scale the diff with 1/(N-1) because we're not using the
@@ -96,6 +111,9 @@ def get_cylindrical_axis(CA_sel, transmembrane_helix_sel_strs):
                 static_helix_PA1 = -static_helix_PA1
 
             static_cylindrical_axis += static_helix_PA1
+
+        if first_static_helix_PA1 is None:
+            raise Exception('No transmembrane helices were found')
 
         return static_cylindrical_axis/np.linalg.norm(static_cylindrical_axis)
 
