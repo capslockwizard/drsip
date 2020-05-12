@@ -117,3 +117,6 @@ examples/
 
 # Ignore vscode folder
 .vscode/
+
+# Ignore the conda build folder
+conda/
