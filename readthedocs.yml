@@ -12,11 +12,6 @@ sphinx:
 # Optionally build your docs in additional formats such as PDF and ePub
 formats: all
 
-# Optionally set the version of Python and requirements required to build your docs
-python:
-   version: 2.7
-   install:
-      - requirements: requires.txt
-      - method: pip
-        path: .
-   system_packages: true
+# Use conda to build the environment rather than pip
+conda:
+  environment: environment.yml
