@@ -16,5 +16,7 @@ dependencies:
   - drsip-common
   - docking-eval
   - openpyxl
+  - recommonmark
+  - pip
   - pip:
     - duecredit
