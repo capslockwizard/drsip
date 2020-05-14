@@ -16,7 +16,7 @@ dependencies:
   - drsip-common
   - docking-eval
   - openpyxl
-  - recommonmark
   - pip
   - pip:
     - duecredit
+    - sphinxcontrib-websupport=1.1.2
