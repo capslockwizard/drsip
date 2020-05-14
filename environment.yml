@@ -19,4 +19,4 @@ dependencies:
   - pip
   - pip:
     - duecredit
-    - sphinxcontrib-websupport=1.1.2
+    - sphinxcontrib-websupport==1.1.2
