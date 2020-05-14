@@ -1,0 +1,19 @@
+name: drsip
+channels:
+  - conda-forge
+  - drsip
+dependencies:
+  - python=2.7
+  - zdock-parser
+  - llvmlite=0.31.0
+  - numba
+  - numpy
+  - scipy
+  - pandas
+  - u-msgpack-python
+  - MDAnalysis
+  - biopython
+  - drsip-common
+  - docking-eval
+  - openpyxl
+  - duecredit
